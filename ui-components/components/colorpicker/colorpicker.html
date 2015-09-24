@@ -1,0 +1,20 @@
+<polymer-element name="xui-colorpicker" constructor="XUIColorpicker">
+
+    <template>
+        <link rel="stylesheet" href="css/colorpicker.css" />
+        <div id="colorPicker">
+            <div id="picker" tabindex="0" on-click="{{ showHidePicker }}" on-keydown="{{ onPickerKeydown }}">
+                <div class="picker-arrow">
+                </div> 
+            </div>
+            <div id="paletteContainer">
+                <span></span>
+                <input id="inputColor" on-keydown="{{ onInputKeydown }}">
+                <div id="palette">
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script src="js/colorpicker.js"></script>
+</polymer-element>

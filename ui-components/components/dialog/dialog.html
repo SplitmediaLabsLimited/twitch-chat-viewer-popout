@@ -1,0 +1,25 @@
+<polymer-element name="xui-dialog" vertical layout>
+    
+    <template>
+        <link rel="stylesheet" href="../globals/globals.css" />
+        <link rel="stylesheet" href="./dialog.css" />
+
+        <div id="titlebar" horizontal layout> 
+            <div id="title" flex>
+                <content select="[titlebar]"></content>
+            </div>
+            <xui-checkbox id="sticky" horizontal layout reverse>
+                Sticky
+            </xui-checkbox>
+        </div>
+
+        <div id="content" flex><content select="[content]"></content></div>
+
+        <div id="footer">
+            <xui-checkbox id="keepsource">Keep source in memory</xui-checkbox>
+        </div>
+    </template>
+
+    <script src="./dialog.js"></script>
+
+</polymer-element>

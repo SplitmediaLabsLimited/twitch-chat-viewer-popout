@@ -1,0 +1,17 @@
+:host
+{
+	display: block;
+	line-height: 2.2em;
+	white-space: nowrap;
+	font-size: 1.2em;
+	padding: 0 0.5em;
+	text-overflow: ellipsis;
+  	overflow: hidden;
+  	cursor: pointer;
+}
+
+:host(:hover)
+{
+	background-color: #043151;
+	color: #EEE;
+}

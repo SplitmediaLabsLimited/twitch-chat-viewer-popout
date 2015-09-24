@@ -1,0 +1,110 @@
+#dropdown,
+label
+{
+    color: #CCC;
+    font-size: 12px;
+}
+
+label.disabled
+{
+    color: #555;
+}
+
+#options 
+{
+    width: inherit;
+    height: inherit;
+    min-height: 24px;
+    background: #393939;
+    border: 1px solid #000;
+    overflow: scroll;
+    overflow-x: hidden;
+    z-index: 10;
+}
+
+#options a
+{
+    color: #999;
+    overflow: hidden;
+    display: block;
+    font-size: 12px;
+    padding: 2px 5px;
+    text-decoration: none;
+    word-break: break-all;
+}
+
+#options a:hover,
+#options a:focus,
+#options a.selected
+{
+    color: #eee;
+    background: #555;
+}
+
+#options.disabled a,
+#options.disabled a:hover,
+#options.disabled a:focus
+{
+    background: #212121;
+    color: #555;
+}
+
+/** Scrollbar **/
+::-webkit-scrollbar              
+{
+    background: #000;
+    width: 12px;
+}
+
+::-webkit-scrollbar-button
+{
+    height: 8px;
+    width: 12px;
+}
+
+::-webkit-scrollbar-button:increment
+{ 
+     background: transparent url("../images/scrollbar_down.png") no-repeat  2px; 
+}
+
+::-webkit-scrollbar-button:decrement
+{ 
+    background: transparent url("../images/scrollbar_up.png") no-repeat  2px;
+}
+
+::-webkit-scrollbar-button:increment:hover
+{ 
+     background: transparent url("../images/scrollbar_down_hover.png") no-repeat  2px; 
+}
+
+::-webkit-scrollbar-button:decrement:hover
+{ 
+    background: transparent url("../images/scrollbar_up_hover.png") no-repeat  2px;
+}
+
+::-webkit-scrollbar-button:increment:disabled
+{ 
+     background: transparent url("../images/scrollbar_down_disabled.png") no-repeat  2px; 
+}
+
+::-webkit-scrollbar-button:decrement:disabled
+{ 
+    background: transparent url("../images/scrollbar_up_disabled.png") no-repeat  2px;
+}
+
+::-webkit-scrollbar-track        
+{ 
+    background: #000;
+}
+
+::-webkit-scrollbar-thumb:hover      
+{ 
+    background: #eee;
+}
+
+::-webkit-scrollbar-thumb        
+{
+    background: #393939;
+    border-left: 1px solid #000;
+    width: 10px;
+}

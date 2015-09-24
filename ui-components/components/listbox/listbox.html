@@ -1,0 +1,16 @@
+<polymer-element name="xui-listbox" constructor="XUIListBox">
+
+    <template>
+        <link rel="stylesheet" href="css/listbox.css" />
+
+        <label for="dropdown" id="label">{{ label }}</label>
+        <div id="options">
+            <template repeat="{{ option in optionlist }}">
+                <a href="#" id="{{ option.id }}" value="{{ option.id }}" class="{{ itemclass }}" on-click="{{ selectOptions }}">{{ option.name }}</a>
+            </template>
+        </div>
+        <content></content>
+    </template>
+
+    <script src="js/listbox.js"></script>
+</polymer-element>

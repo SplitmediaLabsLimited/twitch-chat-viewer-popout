@@ -1,0 +1,18 @@
+<link rel="import" href="./radio-group.html" />
+
+<polymer-element name="xui-radio">
+
+    <template>
+    	<link rel="import" href="../globals/globals.html" />
+        <link rel="stylesheet" href="./radio.css" />
+
+        <xui-utils-hash value="{{ hash }}" initial="radio-"></xui-utils-hash>
+
+        <input type="radio" id="{{ hash }}" 
+            on-change="{{ radioChanged }}" />
+        <label for="{{ hash }}"><content></content></label>
+    </template>
+
+    <script src="./radio.js"></script>
+
+</polymer-element>

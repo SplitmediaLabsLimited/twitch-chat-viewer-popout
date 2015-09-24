@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+    <head>
+         <style>
+            body
+            {
+                background-color: #313131;
+            }
+        </style>
+        <script 
+            src="../../../webcomponentsjs/webcomponents.js">
+        </script>
+        
+        <link rel="import" href="../../../polymer/polymer.html" />
+        <link rel="import" href="listbox.html" />
+    </head>
+    <body>
+        
+<div>
+        <template is="auto-binding">
+                <xui-listbox  label="List box" id="listbox" optionlist="{{ list }}">
+        </xui-listbox>
+            </template>
+        </div>
+     <div>      
+        
+        <template id="disabledbox" is="auto-binding">
+                <xui-listbox disabled label="List box" id="listbox" optionlist="{{ list }}">
+        </xui-listbox>
+            </template>
+        </div>
+        
+                <script type="text/javascript">
+            var list = [];
+            list.push({id: 0, name: 'Scene 1', attributes : {module: "module 1"}});
+            list.push({id: 0, name: 'Scene 1'});
+            list.push({id: 0, name: 'Scene 1'});
+            list.push({id: 0, name: 'Scene 1'});
+            scope = document.querySelector('template[is=auto-binding]');
+            scope.list = list;
+                    
+                    document.querySelector('#disabledbox').list = list;
+        </script>
+    </body>
+</html>

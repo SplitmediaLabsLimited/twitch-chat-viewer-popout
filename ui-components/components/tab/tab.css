@@ -1,0 +1,38 @@
+:host
+{
+	display: inline-block;
+	border-radius: 4px 4px 0 0;
+	background-color: #212121;
+	color: #999;
+	text-align: center;
+	padding: 0.5em 1.5em 0.2em;
+	margin: 0 0 0.2em 0.2em;
+	cursor: pointer;
+	font-size: 1.2em;
+}
+
+:host(:hover)
+{
+	background-color: #555;
+	color: #CCC;
+}
+
+:host([selected])
+{
+	background-color: #313131;
+	color: #CCC;
+	box-shadow: 0 0.1em 0 0 #313131, 0 0.2em 0 0 #313131;
+	cursor: default;
+}
+
+:host-context([horizontal])
+{
+	border-radius: 4px 0px 0px 4px;
+	margin: 0.2em 0.2em 0 0;
+	padding: 1.5em 0.2em 1.5em 0.5em;
+}
+
+:host-context([horizontal]):host([selected])
+{
+	box-shadow: 0.1em 0 0 0 #313131, 0.2em 0 0 0 #313131;
+}

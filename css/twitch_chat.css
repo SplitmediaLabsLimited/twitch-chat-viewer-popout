@@ -1,0 +1,108 @@
+*:not(input):not(textarea)
+{
+	-webkit-user-select: none;
+}
+
+input[disabled],
+textarea[disabled]
+{
+	-webkit-user-select: none;
+}
+
+html, body
+{
+	height: 100%;
+}
+
+body
+{
+	background-color: #111111;
+	font-family: 'Calibri', 'Segoe UI', 'Arial', 'sans-serif';
+	overflow: hidden;
+	margin: 0;
+}
+
+body[mode=chat] #standby
+{
+	display: none;
+}
+
+body[mode=standby] #chat
+{
+	display: none;
+}
+
+*::-webkit-scrollbar
+{
+	display: none;
+}
+
+#chat
+{
+	margin: 0;
+	width: 100%;
+	height: 100%;
+	overflow-y: scroll;
+	overflow-x: hidden;
+	position: relative;
+	padding: 5px;
+	background-color: transparent;
+	color: #FFFFFF;
+	box-sizing: border-box;
+	font-size: 17px;
+	line-height: 17px;
+}
+
+#chat .messages
+{
+	padding: 0;
+	margin: 0;
+	list-style: none;
+	position: relative;
+	outline: none;
+}
+
+#chat .messages li
+{
+	min-height: 20px;
+	overflow: hidden;
+	position: relative;
+}
+
+#chat .messages img
+{
+	vertical-align: middle;
+	display: inline;
+}
+
+#chat .username
+{
+	margin-right: 3px;
+}
+
+#chat .message
+{
+	margin-right: 3px;
+	word-wrap: break-word;
+}
+
+#chat [usertype=owner] 
+{
+	color: #FFFFFF;
+}
+
+#standby,
+#connecting
+{
+	width: 100%;
+	height: 100%;
+	background-size: contain;
+	background-color: #111111;
+	background-repeat: no-repeat;
+	background-position: center center;
+}
+
+#standby
+{
+	background-image: url("../images/twitch_standby.png");
+}

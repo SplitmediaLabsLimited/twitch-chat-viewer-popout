@@ -1,0 +1,38 @@
+:host
+{
+  	width: 20em;
+  	height: 2.2em;
+  	display: inline-block;
+  	border: 0.1em solid #000;
+  	background-color: #393939;
+}
+
+input
+{
+	background-color: transparent;
+	font-size: 1.2em;
+	padding: 0;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	white-space: nowrap;
+	display: inline-block;
+	width: 100%;
+	height: 100%;
+	color: #EEE;
+	border: none;
+    outline: none;
+    text-indent: 0.5em;
+}
+
+input
+{
+	text-align: {{textAlign}};
+}
+
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button
+{ 
+	margin-top: 1px;
+	margin-right: 1px;
+    cursor:pointer;
+}

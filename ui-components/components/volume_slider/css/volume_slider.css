@@ -1,0 +1,43 @@
+:host
+{
+	overflow: hidden;
+	display: inline-block;
+	position: relative;
+}
+
+:host[disabled]
+{
+
+}
+
+bar
+{
+	background-color: #000000;
+	display: inline-block;
+	height: 21px;
+	width: 59px;
+}
+
+overlay
+{
+	height: 21px;
+	width: 59px;
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 1;
+	background-image: url("../images/volume_bars.png");
+	pointer-events: none;
+}
+
+level
+{
+	display: block;
+	height: 21px;
+	background-color: #FFFFFF;
+}
+
+:host[disabled] level
+{
+	background-color: #555555;
+}

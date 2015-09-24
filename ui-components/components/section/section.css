@@ -1,0 +1,22 @@
+:host
+{
+	margin: 0.5em 0.8em;
+	display: block;
+	position: relative;
+	padding-top: 1.6em;
+}
+
+:host label
+{
+	color: #888;
+	font-size: 1.2em;
+	position: absolute;
+	top: 0;
+}
+
+#content
+{
+	border: 0.1em solid #555;
+	padding: 0.5em;
+	min-height: 1em;
+}

@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+
+<head>
+    <style>
+        body {
+            background-color: #313131;
+        }
+        
+        #dropdown {
+            width: 200px;
+        }
+    </style>
+    <script src="../../../webcomponentsjs/webcomponents.js">
+    </script>
+
+    <link rel="import" href="../../../polymer/polymer.html" />
+    <link rel="import" href="dropdown.html" />
+</head>
+
+<body>
+
+
+    <xui-dropdown id="dropdown" label="Dropdown List" value="12" optionlist="{{ optionlist }}">
+    </xui-dropdown>
+    <br/>
+    <br/>
+    <xui-dropdown id="dropdown2" label="Dropdown List" value="12" optionlist="{{ optionlist }}" disabled>
+    </xui-dropdown>
+
+    <script type="text/javascript">
+        var list = [];
+        list.push({
+            id: 0,
+            name: 'Scene 1'
+        });
+        list.push({
+            id: 0,
+            name: 'Scene1Scene1Scene1Scene1Scene1Scene1 Scene1Scene1Scene1Scene1'
+        });
+
+        document.querySelector('#dropdown').optionlist = list;
+        document.querySelector('#dropdown2').optionlist = list;
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,47 @@
+:host
+{
+	display: inline-block;
+	height: 2.2em;
+	min-width: 10em;
+}
+
+img 
+{
+	vertical-align: middle;
+}
+
+button
+{
+	background-color: #191919;
+	border: 0.1em solid #555555;
+	cursor: pointer;
+	color: #FFF;
+	padding: 0 2em;
+	white-space: nowrap;
+    font-size: 1.2em;
+    outline: none;
+    display: inline-block;
+    width: 100%;
+    height: 100%;
+}
+
+button:focus,
+button:hover
+{
+	background-color: #043151;
+	border: 0.1em solid #EEE;
+	cursor: pointer;
+}
+
+button:disabled
+{
+	background-color: #000;
+	border-color: #555;
+	cursor: default;
+	color: #555;
+}
+
+button
+{
+	line-height: 1.2em;
+}

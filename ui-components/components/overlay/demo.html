@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+
+<head>
+    <style>
+        body {
+            background-color: #313131;
+        }
+        
+        .box {
+            display: block;
+            clear: both;
+        }
+        
+        #overlay {
+            width: 320px;
+            height: 242px;
+        }
+    </style>
+    <script src="../../../bower_components/webcomponentsjs/webcomponents.js">
+    </script>
+</head>
+
+<body>
+    <link rel="import" href="../../../polymer/polymer.html" />
+    <link rel="import" href="../button/button.html">
+    <link rel="import" href="../dropdown/dropdown.html">
+    <link rel="import" href="overlay.html" />
+
+    <button>Show</button>
+
+    <xui-overlay id="overlay">
+        <div id="header">
+            title
+        </div>
+        <div id="body">
+            content
+        </div>
+        <div id="footer">
+            <xui-button id="addItem" disabled="{{ disabled }}">Add</xui-button>
+            <xui-button id="cancelItem">Cancel</xui-button>
+        </div>
+    </xui-overlay>
+
+    <script type="text/javascript">
+        document.querySelector("button").onclick = function () {
+            document.querySelector("xui-overlay").visible = true;
+        };
+    </script>
+</body>
+
+</html>

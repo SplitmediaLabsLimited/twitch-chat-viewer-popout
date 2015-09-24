@@ -1,0 +1,12 @@
+<polymer-element name="xui-volume-slider" constructor="XUIVolumeSlider" attributes="value min max">
+
+    <template>
+        <link rel="stylesheet" href="css/volume_slider.css" />
+        <bar id="bar" on-mousedown=" {{ onBarDown }} ">
+            <level id="level"></level>
+        </bar>
+        <overlay></overlay>
+    </template>
+
+    <script src="js/volume_slider.js"></script>
+</polymer-element>

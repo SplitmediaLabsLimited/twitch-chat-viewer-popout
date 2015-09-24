@@ -1,0 +1,18 @@
+<polymer-element name="xui-tab-group" vertical layout flex>
+
+    <template>
+    	<link rel="import" href="../globals/globals.html" />
+        <link rel="stylesheet" href="./tab-group.css" />
+        
+		<div id="tabs" on-click="{{ onTabClick }}">
+			<content select="xui-tab"></content>
+		</div>
+		
+		<div id="contents" vertical layout flex>
+			<content select="xui-tab-content"></content>
+		</div>
+    </template>
+
+    <script src="./tab-group.js"></script>
+
+</polymer-element>

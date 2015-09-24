@@ -1,0 +1,21 @@
+#tabs
+{
+	padding-left: 0.5em;
+}
+
+#contents ::content > *
+{
+	-webkit-flex: 1;
+}
+
+#tabs
+{
+    overflow: hidden;
+}
+
+:host([horizontal])::shadow #tabs
+{
+    display: flex;
+    flex-direction: column;
+    padding-top: 0.5em;
+}

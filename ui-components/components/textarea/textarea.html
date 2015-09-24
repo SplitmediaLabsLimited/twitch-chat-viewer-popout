@@ -1,0 +1,14 @@
+<polymer-element name="xui-textarea">
+
+    <template>
+        <link rel="import" href="../globals/globals.html" />
+        <link rel="stylesheet" href="./textarea.css" />
+
+        <textarea rows="{{ rows }}" cols="{{ cols }}" disabled?="{{ disabled }}"
+                  maxlength="{{ maxlength }}" wrap="{{ wrap }}" 
+                  value="{{ text }}"></textarea>
+    </template>
+
+    <script src="./textarea.js"></script>
+    
+</polymer-element>

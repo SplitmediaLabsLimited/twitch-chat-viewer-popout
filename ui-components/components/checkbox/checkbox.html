@@ -1,0 +1,15 @@
+<polymer-element name="xui-checkbox">
+
+    <template>
+    	<link rel="stylesheet" href="../globals/globals.css" />
+        <link rel="stylesheet" href="./checkbox.css" />
+
+        <xui-utils-hash value="{{ hash }}" initial="checkbox-"></xui-utils-hash>
+        
+        <input type="checkbox" id="{{ hash }}" 
+        	on-change="{{ checkboxChanged }}" />
+        <label for="{{ hash }}"><content></content></label>
+    </template>
+
+    <script src="./checkbox.js"></script>
+</polymer-element>

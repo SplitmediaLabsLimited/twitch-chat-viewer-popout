@@ -1,0 +1,39 @@
+*
+{
+	color: #EEE;
+}
+
+:host
+{
+	display: -webkit-flex;
+	-webkit-flex-direction: column;
+	width: 36em;
+	height: 44.5em;
+	border: 0.3em solid #191919;
+	background-color: #000;
+}
+
+#title
+{
+	font-size: 1.2em;
+	line-height: 2.2em;
+	padding-left: 0.5em;
+}
+
+#sticky
+{
+  	line-height: 2.2em;
+}
+
+#content,
+#content ::content > *
+{
+	-webkit-flex: 1;
+	display: flex;
+	-webkit-flex-direction: column;
+}
+
+#footer
+{
+	background-color: #313131;
+}

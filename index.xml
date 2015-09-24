@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <CanPause>false</CanPause>
+  <CanPlay>false</CanPlay>
+  <CanSetVolume>false</CanSetVolume>
+  <CanPlayAudio>false</CanPlayAudio>
+  <CanStepBackward>false</CanStepBackward>
+  <CanStepForward>false</CanStepForward>
+  <CanStop>false</CanStop>
+  <CanCustomizeCSS>false</CanCustomizeCSS>
+  <CanSetResolution>false</CanSetResolution>
+  <Description />
+  <HelpLink />
+  <HelpText>
+  </HelpText>
+  <Name>twitchchathtml5</Name>
+  <param name="flashvars" value="" />
+  <ProperName>Twitch Chat Viewer via HTML 5</ProperName>
+  <UseEmbeddedConfig>true</UseEmbeddedConfig>
+  <ShowConfigOnAdd>false</ShowConfigOnAdd>
+  <ShowModalConfig>false</ShowModalConfig>
+  <MinCompatibleVersion>2.6.1509.2104</MinCompatibleVersion>
+  <MinFxVersion>2.6.1509.2104</MinFxVersion>
+  <Version>2.6.1509.2301</Version>
+</config>

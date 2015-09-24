@@ -1,0 +1,304 @@
+@font-face
+{
+    font-family: "roboto";
+    src: url("../fonts/Roboto-Regular.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+}
+
+*
+{
+	outline: 0;
+	cursor: default;
+}
+
+*:not(input):not(textarea)
+{
+	-webkit-user-select: none;
+}
+
+input[disabled],
+textarea[disabled]
+{
+	-webkit-user-select: none;
+}
+
+body
+{
+	background-color: #313131;
+	font-family: 'Roboto', 'sans-serif';
+	font-size: 11px;
+	width: 354px;
+	margin: 0;
+}
+
+.container
+{
+	padding: 0;
+	padding-top: 10px;
+	margin: 0;
+	background-color: #313131;
+	overflow: hidden;
+}
+.subcon
+{
+	padding: 5px;
+	margin: 0;
+	color: #888888;
+}
+.box
+{
+	border: 1px solid #5A5A5A;
+	padding: 6px;
+	padding-top: 7px;
+	margin-top: 2px;
+	box-sizing: border-box;
+}
+.boxInner
+{
+	border: 1px solid #000000;
+	background-color: #212121;
+	color: #CCCCCC;
+	padding: 6px;
+}
+
+.boxInner .subtitle
+{
+	padding: 0;
+	margin-right: 20px;
+	line-height: 24px;
+}
+
+span.title
+{
+	font-size: 12px;
+}
+.boxInner span.subtitle
+{
+	line-height: 20px;
+}
+
+.boxInner div
+{
+	display: flex;
+}
+
+.boxItem
+{
+	border: 1px solid #5A5A5A;
+	margin: 0;
+	display: inline-block;
+	width: auto;
+	padding: 2px;
+	flex: 1;
+}
+.boxItem label
+{
+	padding: 0;
+	margin-left: 6px;
+}
+
+.channelbox
+{
+	padding: 0;
+}
+.channel
+{
+	display: block;
+}
+.chbox
+{
+	margin: 6px;
+}
+
+.subtitle2
+{
+	font-size: 10px;
+	color: #888888;
+}
+
+input[type=text],
+input[type=number]
+{
+	font-size: 11px;
+	color: #999999;
+	border: 1px solid #000000;
+	height: 20px;
+	background-color: #393939;
+	padding: 0 4px 0 4px;
+}
+
+input[type=text]:not([disabled]),
+input[type=number]:not([disabled])
+{
+	cursor: text;
+}
+
+input[type=text]:hover:not([disabled]),
+input[type=number]:hover:not([disabled])
+{
+	background-color: #555555;
+}
+
+input[type=text]:focus,
+input[type=number]:focus
+{
+	color: #EEEEEE;
+}
+
+input[name=channel]
+{
+	margin-right: 8px;
+	width: 182px;
+}
+
+.error
+{
+	font-size: 10px;
+	background-image: url("../images/i_error_12.png");
+	background-size: 13px 13px;
+	background-repeat: no-repeat;
+	background-position: 5px 5px;
+	padding-left: 22px;
+	height: 22px;
+	line-height: 22px;
+}
+.channelbox[notfound] div[name=error]
+{
+	display: flex;
+}
+
+div[name=error]
+{
+	display: none;
+}
+
+.subcon.display
+{
+	padding-top: 1px;
+}
+
+.subcon.display .box
+{
+
+}
+
+.subcon.display label
+{
+	width: 54px;
+	display: inline-block;
+}
+
+.subcon.display label.opacity
+{
+	overflow: visible;
+	margin-left: 2px;
+	margin-right: 6px;
+	width: 67px;
+	text-align: right;
+}
+
+xui-slider /deep/ input[type=range]
+{
+	width: 75px;
+}
+
+xui-slider /deep/ input[type=text]
+{
+	font-size: 11px;
+}
+
+xui-colorpicker
+{
+	display: inline-block;
+	margin-bottom: 5px;
+	margin-right: -4px;
+}
+
+xui-dropdown
+{
+	display: inline-block;
+	width: 237px;
+}
+
+xui-dropdown /deep/ #dropdown
+{
+	display: inline-block;
+	vertical-align: middle;
+	margin: 0;
+}
+
+xui-dropdown /deep/ #dropdown li a
+{
+	height: 14px;
+	font-size: 11px;
+}
+
+xui-dropdown /deep/ #options
+{
+	bottom: 22px;
+	left: 0px;
+	width: calc(100% + 1px);
+	min-height: 22px;
+}
+
+xui-dropdown[name=fontViewers]
+{
+	width: 259px;
+	margin-bottom: 5px;
+}
+
+xui-dropdown[name=fontViewers] /deep/ #options
+{
+	width: 100%;
+}
+
+xui-input
+{
+	width: 60px;
+	height: auto;
+}
+
+xui-input /deep/ #input
+{
+	font-size: 11px;
+	height: 20px;
+}
+
+/*************************************************
+ ** Button
+ *************************************************/
+button
+{
+	background-color: #191919;
+	border: 1px solid #555555;
+	font-size: 11px;
+	color: #FFFFFF;
+}
+button:not(:disabled)
+{
+	cursor: pointer;
+}
+button:hover,
+button:focus,
+button:active
+{
+	background-color: #043151;
+	border: 1px solid #EEEEEE;
+	color: #FFFFFF;
+}
+button:disabled
+{
+	background-color: #000000;
+	border: 1px solid #555555;
+	color: #555555;
+}
+button[name=connect]
+{
+	float: right;
+	height: 22px;
+	width: auto;
+	padding: 0;
+	line-height: 20px;
+	width: 120px;
+}

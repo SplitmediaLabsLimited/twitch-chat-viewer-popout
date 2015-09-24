@@ -1,0 +1,14 @@
+<polymer-element name="xui-input" attributes="textAlign value max min">
+
+    <template>
+    	<link rel="import" href="../globals/globals.html" />
+        <link rel="stylesheet" href="./input.css" />
+
+        <input type="{{ type }}" placeholder="{{ placeholder }}" id="input"
+        	   text-align="{{ textAlign }}" max="{{ max }}" min="{{ min }}"/>
+    </template>
+
+    <script src="./input.js"></script>
+    
+</polymer-element>
+

@@ -1,0 +1,77 @@
+.ember-chat .chat-header
+{
+	display: none !important;
+}
+
+.ember-chat .chat-room
+{
+	top: 0px !important;
+}
+
+.ember-chat .chat-messages
+{
+	bottom: 0px !important;
+}
+
+.ember-chat .chat-messages .chat-line.admin
+{
+	display: none !important;
+}
+
+.ember-chat .chat-interface
+{
+	display: none !important;
+}
+
+.ember-chat .chat-messages .chat-line .from,
+.ember-chat .chat-messages .chat-line .to
+{
+  font-family: %viewerFont%, Arial, sans-serif;
+  pointer-events: none;
+}
+
+.ember-chat .chat-messages .chat-line .message
+{
+  font-family: %messageFont%, Arial, sans-serif;
+  color: %messageColor%;
+}
+
+body:not([mode=standby])
+{
+	background: %boxColor% !important;
+}
+
+body:not([mode=standby]) *:not(.badge)
+{
+	background: transparent !important;
+}
+
+#noty_bottomCenter_layout_container
+{
+	display: none !important;
+}
+
+.ember-chat .chat-messages .chat-line .badges .badge
+{
+	background-repeat: no-repeat;
+	background-size: %textSize%;
+	width: %textSize%;
+	height: %textSize%;
+}
+
+.ember-chat .chat-messages .chat-line
+{
+	font-size: %textSize%;
+	line-height: %textSize%;
+}
+
+.ember-chat .chat-messages .chat-line .emoticon
+{
+	height: %emoSize%;
+	vertical-align: middle;
+}
+
+.tipsy
+{
+	display: none !important;
+}

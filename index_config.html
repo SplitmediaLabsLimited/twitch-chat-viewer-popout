@@ -1,0 +1,79 @@
+<!--
+/**
+*
+* Copyright (c) 2009-2015 SplitmediaLabs Limited, All rights reserved.
+* <licenseinfo@splitmediaLabs.com>
+*   
+* This file is distributed only as part of SplitmediaLabs Limited's software development toolkits.
+*
+* Please be aware that the content of this file is considered confidential in nature and may not be distributed to any third party.
+* You may only use this file subject to direct and explicit grant of rights by SplitmediaLabs Limited, either by written license agreement or written permission.
+* You may use this file in its original or modified form solely for the purpose, and subject to the terms, stipulated by the license agreement or permission.
+*
+* Please delete all traces of the file from your system and notify SplitmediaLabs Limited immediately.
+*
+*/
+-->
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Twitch Chat Viewer via HTML5 Configuration</title>
+		<script src="ui-components/webcomponentsjs/webcomponents.js"></script>
+		<link rel="import" href="ui-components/polymer.html" />
+
+		<!-- XUI Polymer Components -->
+		<link rel="import" href="./ui-components/components/button/button.html" />
+		<link rel="import" href="./ui-components/components/input/input.html" />
+		<link rel="import" href="./ui-components/components/tab/tab.html" />
+		<link rel="import" href="./ui-components/components/dialog/dialog.html" />
+		<link rel="import" href="./ui-components/components/section/section.html" />
+
+		<link rel="import" href="./ui-components/components/dropdown/dropdown.html" />
+		<link rel="import" href="./ui-components/components/colorpicker/colorpicker.html" />
+		<link rel="import" href="./ui-components/components/slider/slider.html" />
+		<link rel="import" href="./ui-components/components/volume_slider/volume_slider.html" />		
+        <link rel="stylesheet" href="./css/twitch_chat_config.css" />
+    </head>
+    <body>
+		<div class="container">
+			<div id="source" class="subcon">
+				<span class="title" i18n="chat.source">Source</span>
+				<div class="box">
+					<div class="boxInner channelbox">
+						<div class="subtitle2 chbox" i18n="chat.channel_text" data-service="Twitch">Type the channel of the Twitch chat you want to display</div>
+						<div class="channel chbox">
+							<span class="subtitle" i18n="chat.channel">Channel</span>
+							<input name="channel" type="text" i18n-placeholder="chat.channel_name" placeholder="Channel Name" disabled>
+							<button name="connect" i18n="chat.connect" disabled>Connect</button>
+						</div>
+						<div class="subtitle2 chbox error" name="error" i18n="chat.error_channel_not_found" data-service="Twitch">Twitch channel not found</div>
+					</div>
+				</div>
+			</div>
+			<div id="display" class="subcon display">
+				<span class="title" i18n="chat.display">Display</span>	
+				<div class="box">
+					<div class="boxInner">
+						<label i18n="chat.chat_box">Chat Box</label>
+						<xui-colorpicker name="chatbox"></xui-colorpicker>
+						<label class="opacity" i18n="chat.opacity">Opacity</label>
+						<xui-slider name="opacity"></xui-slider>
+						<br>
+						<label i18n="chat.viewers">Viewers</label>
+						<xui-dropdown name="fontViewers"></xui-dropdown>
+						<br>
+						<label i18n="chat.message">Message</label>
+						<xui-colorpicker name="messageColor"></xui-colorpicker>
+						<xui-dropdown name="fontMessage"></xui-dropdown>
+						<br>
+						<label i18n="chat.text_size">Text Size</label>
+						<xui-input type="number" name="text_size" textAlign="right" min="10" max="200" value = "13"></xui-input>
+						<label>px</label>
+					</div>	
+				</div>
+			</div>
+		</div>
+		<script src="./js/xjs.js" ></script>
+		<script src="./js/twitch_config.js"></script>
+    </body>
+</html>

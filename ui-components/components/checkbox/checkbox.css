@@ -1,0 +1,52 @@
+input, label
+{
+    cursor: default;
+    color: #555;
+    
+    font-size: 1.2em;
+    vertical-align: middle;
+    display: inline-block;
+}
+
+input:not(:disabled),
+input:not(:disabled) + label
+{
+    cursor: pointer;
+    color: #EEE;
+}
+
+input
+{
+    -webkit-appearance: none;
+    display: inline-block;
+    width: 18px;
+    height: 17px;
+    background-image: url("./images/checkbox_off.png");
+}
+
+input:checked
+{
+    background-image: url("./images/checkbox_on.png");
+}
+
+input:focus,
+input:hover
+{
+    background-image: url("./images/checkbox_off_hover.png");
+}
+
+input:checked:focus,
+input:checked:hover
+{
+    background-image: url("./images/checkbox_on_hover.png");
+}
+
+input:disabled
+{
+    background-image: url("./images/checkbox_off_disabled.png");
+}
+
+input:checked:disabled
+{
+    background-image: url("./images/checkbox_on_disabled.png");
+}

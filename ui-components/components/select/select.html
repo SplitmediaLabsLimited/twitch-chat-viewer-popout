@@ -1,0 +1,23 @@
+<link rel="import" href="./option.html" />
+<link rel="import" href="./option-group.html" />
+
+<polymer-element name="xui-select" tabindex="0">
+
+    <template>
+        <link rel="import" href="../globals/globals.html" />
+        <link rel="stylesheet" href="./select.css" />
+        
+        <div id="wrap">
+		    <input id="input" type="text" 
+		    	   value="{{ selected.label }}" placeholder="{{ placeholder }}" readonly />
+		    <button id="toggle"></button>
+        </div>
+
+        <ul id="list">
+        	<content select="xui-option,xui-option-group"></content>
+        </ul>
+    </template>
+
+    <script src="./select.js"></script>
+
+</polymer-element>

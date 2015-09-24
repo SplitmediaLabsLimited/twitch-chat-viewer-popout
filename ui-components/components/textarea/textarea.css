@@ -1,0 +1,21 @@
+:host
+{
+  	width: 20em;
+  	display: inline-block;
+  	border: 0.1em solid #000;
+  	background-color: #393939;
+}
+
+textarea
+{
+	background-color: transparent;
+	font-size: 1.2em;
+	padding: 0.2em 0.5em;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	display: inline-block;
+	width: 100%;
+	color: #EEE;
+	border: none;
+	resize: none;
+}
