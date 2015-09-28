@@ -6,6 +6,11 @@
     font-style: normal;
 }
 
+html
+{
+	overflow: hidden;
+}
+
 *
 {
 	outline: 0;
