@@ -5,7 +5,7 @@
 		var xjs = require('xjs');
 		var system = xjs.System;
 		var Item = xjs.Item;
-		var configWindow = xjs.SourceConfigWindow.getInstance();
+		var configWindow = xjs.SourcePropsWindow.getInstance();
 		var myItem;
 		var configObj = {};
 		var DEFAULT_OPACITY = 100;
@@ -24,9 +24,9 @@
 				tabOrder: [CUSTOM_TAB_NAME, 'Layout', 'Color', 'Transition']
 			});
 		})
-		.then(Item.getCurrentSource)
+		.then(Item.getItemList)
 		.then(function(item) {
-			myItem = item;
+			myItem = item[0];
 
 			var display = document.getElementById('display');
 			var channelInput = document.getElementsByName('channel')[0];
@@ -292,7 +292,7 @@
 				})
 				.then(function() {
 					if (typeof close !== 'undefined' && close) {
-						configWindow.closeConfig();
+						configWindow.close();
 					}
 				});
 			};

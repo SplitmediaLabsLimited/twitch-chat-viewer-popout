@@ -1,3 +1,45 @@
+/**
+ * XSplit JS Framework
+ * version: 1.4.0
+ *
+ * XSplit Extensibility Framework and Plugin License
+ *
+ * Copyright (c) 2015, SplitmediaLabs Limited
+ * All rights reserved.
+ *
+ * Redistribution and use in source, minified or binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in minified or binary form must reproduce the above
+ *    copyright notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * 3. This software, in source, minified and binary forms, and any derivatives
+ *    hereof, may be used only with the purpose to extend the functionality of the
+ *    XSplit products, developed and published by SplitmediaLabs Limited. It may
+ *    specifically not be used for extending the functionality of any other software
+ *    products which enables live streaming and/or recording functions.
+ *
+ * 4. This software may not be used to circumvent paid feature restrictions for
+ *    free and personal licensees of the XSplit products.
+ *
+ * THIS SOFTWARE IS PROVIDED BY SPLITMEDIALABS LIMITED ''AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT
+ * SHALL SPLITMEDIALABS LIMITED BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+ * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
+ * OF SUCH DAMAGE.
+ *
+ */
+
+
 require=(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var app_1 = require('../internal/app');
@@ -5,6 +47,8 @@ var rectangle_1 = require('../util/rectangle');
 var audio_1 = require('../system/audio');
 var json_1 = require('../internal/util/json');
 var xml_1 = require('../internal/util/xml');
+var internal_1 = require('../internal/internal');
+var environment_1 = require('./environment');
 var transition_1 = require('./transition');
 var DEFAULT_SILENCE_DETECTION_THRESHOLD = 5;
 var DEFAULT_SILENCE_DETECTION_PERIOD = 1000;
@@ -22,6 +66,13 @@ var DEFAULT_SILENCE_DETECTION_PERIOD = 1000;
  *   window.frametime = frametime;
  * });
  * ```
+ *
+ * For methods referring to application audio
+ * (i.e. mic and speaker settings, silence detection, etc.).
+ * This will affect XBC settings
+ * but will not be reflected in the General Settings Window
+ * (also will not be persistent after logging out of/exiting the application).
+ *
  */
 var App = (function () {
     function App() {
@@ -49,7 +100,7 @@ var App = (function () {
     /**
      * return: Promise<Rectangle>
      *
-     * Gets application default output resolution.
+     * Gets application default output resolution in pixels.
      *
      * See also: {@link #util/Rectangle Util/Rectangle}
      *
@@ -97,7 +148,7 @@ var App = (function () {
     /**
      * return: Promise<string>
      *
-     * Refers to XSplit Broadcaster DLL file version number
+     * Refers to XSplit Broadcaster version number
      *
      * #### Usage
      *
@@ -108,8 +159,15 @@ var App = (function () {
      * ```
      */
     App.prototype.getVersion = function () {
-        return new Promise(function (resolve) {
-            resolve(app_1.App.get('version'));
+        return new Promise(function (resolve, reject) {
+            var xbcPattern = /XSplit Broadcaster\s(.*?)\s/;
+            var xbcMatch = navigator.appVersion.match(xbcPattern);
+            if (xbcMatch !== null) {
+                resolve(xbcMatch[1]);
+            }
+            else {
+                reject(Error('not loaded in XSplit Broadcaster'));
+            }
         });
     };
     /**
@@ -149,7 +207,7 @@ var App = (function () {
      * ```
      */
     App.prototype.getPrimaryMic = function () {
-        return new Promise(function (resolve) {
+        return new Promise(function (resolve, reject) {
             app_1.App.getAsList('microphonedev2').then(function (arr) {
                 var audioDevices = arr.map(function (val) {
                     return audio_1.AudioDevice.parse(val);
@@ -158,7 +216,7 @@ var App = (function () {
                     resolve(audioDevices[0]);
                 }
                 else {
-                    resolve(new audio_1.AudioDevice({ id: 'empty' }));
+                    reject(Error('No audio device is set as primary microphone'));
                 }
             });
         });
@@ -179,7 +237,7 @@ var App = (function () {
      * ```
      */
     App.prototype.getPrimarySpeaker = function () {
-        return new Promise(function (resolve) {
+        return new Promise(function (resolve, reject) {
             app_1.App.getAsList('microphonedev2').then(function (arr) {
                 var audioDevices = arr.map(function (val) {
                     return audio_1.AudioDevice.parse(val);
@@ -188,84 +246,462 @@ var App = (function () {
                     resolve(audioDevices[1]);
                 }
                 else {
-                    resolve(new audio_1.AudioDevice({ id: 'empty' }));
+                    reject(Error('No audio device is set as primary speaker'));
                 }
             });
         });
     };
     /**
-     * param: (device: AudioDevice)
+     * param: volume<number> (0 to 100 normal range, > 100 will boost volume level)
      * ```
      * return: Promise<boolean>
      * ```
      *
-     * Sets the primary microphone device to be used in the application
-     *
-     * See also: {@link #system/AudioDevice System/AudioDevice}
+     * Sets the application audio level of the primary microphone set
      *
      * ### Usage
      *
      * ```javascript
-     * App.setPrimaryMic(device).then(function(val) {
+     * App.setPrimaryMicLevel(volume).then(function(val) {
      *   var isSet = val;
      * });
      * ```
      */
-    App.prototype.setPrimaryMic = function (device) {
-        return new Promise(function (resolve) {
+    App.prototype.setPrimaryMicLevel = function (volume) {
+        return new Promise(function (resolve, reject) {
+            if (volume < 0) {
+                reject(Error('Volume can only be positive'));
+            }
             app_1.App.getAsList('microphonedev2').then(function (arr) {
                 var audioDevices = arr.map(function (val) {
                     return audio_1.AudioDevice.parse(val);
                 });
-                audioDevices[0] = device;
-                var dev = '';
-                if (Array.isArray(audioDevices)) {
-                    for (var i = 0; i < audioDevices.length; ++i) {
-                        dev += audioDevices[i].toString();
+                if (audioDevices.length && audioDevices.length > 0) {
+                    var micDevice = audioDevices[0];
+                    micDevice._setLevel(volume);
+                    audioDevices[0] = micDevice;
+                    var dev = '';
+                    if (Array.isArray(audioDevices)) {
+                        for (var i = 0; i < audioDevices.length; ++i) {
+                            dev += audioDevices[i].toString();
+                        }
                     }
+                    dev = '<devices>' + dev + '</devices>';
+                    app_1.App.set('microphonedev2', dev).then(function (setVal) {
+                        resolve(setVal);
+                    });
                 }
-                dev = '<devices>' + dev + '</devices>';
-                app_1.App.set('microphonedev2', dev).then(function (setVal) {
-                    resolve(setVal);
-                });
+                else {
+                    reject(Error('No audio device is set as primary microphone'));
+                }
             });
         });
     };
     /**
-     * param: (device: AudioDevice)
+     * param: enabled<boolean>
      * ```
      * return: Promise<boolean>
      * ```
      *
-     * Sets the primary speaker/audio render device to be used in the application
-     *
-     * See also: {@link #system/AudioDevice System/AudioDevice}
+     * Sets whether the primary microphone set is enabled or disabled in the applicaation
      *
      * ### Usage
      *
      * ```javascript
-     * App.setPrimarySpeaker(device).then(function(val) {
+     * App.setPrimaryMicEnabled(enabled).then(function(val) {
      *   var isSet = val;
      * });
      * ```
      */
-    App.prototype.setPrimarySpeaker = function (device) {
-        return new Promise(function (resolve) {
+    App.prototype.setPrimaryMicEnabled = function (enabled) {
+        return new Promise(function (resolve, reject) {
             app_1.App.getAsList('microphonedev2').then(function (arr) {
                 var audioDevices = arr.map(function (val) {
                     return audio_1.AudioDevice.parse(val);
                 });
-                audioDevices[1] = device;
-                var dev = '';
-                if (Array.isArray(audioDevices)) {
-                    for (var i = 0; i < audioDevices.length; ++i) {
-                        dev += audioDevices[i].toString();
+                if (audioDevices.length && audioDevices.length > 0) {
+                    var micDevice = audioDevices[0];
+                    micDevice._setEnabled(enabled);
+                    audioDevices[0] = micDevice;
+                    var dev = '';
+                    if (Array.isArray(audioDevices)) {
+                        for (var i = 0; i < audioDevices.length; ++i) {
+                            dev += audioDevices[i].toString();
+                        }
                     }
+                    dev = '<devices>' + dev + '</devices>';
+                    app_1.App.set('microphonedev2', dev).then(function (setVal) {
+                        resolve(setVal);
+                    });
                 }
-                dev = '<devices>' + dev + '</devices>';
-                app_1.App.set('microphonedev2', dev).then(function (setVal) {
-                    resolve(setVal);
+                else {
+                    reject(Error('No audio device is set as primary microphone'));
+                }
+            });
+        });
+    };
+    /**
+     * param: volume<number> (0 to 100)
+     * ```
+     * return: Promise<boolean>
+     * ```
+     *
+     * Sets the system audio level of the primary microphone set
+     *
+     * ### Usage
+     *
+     * ```javascript
+     * App.setPrimaryMicSystemLevel(volume).then(function(val) {
+     *   var isSet = val;
+     * });
+     * ```
+     */
+    App.prototype.setPrimaryMicSystemLevel = function (volume) {
+        return new Promise(function (resolve, reject) {
+            if (volume < 0) {
+                reject(Error('Volume can only be positive'));
+            }
+            app_1.App.getAsList('microphonedev2').then(function (arr) {
+                var audioDevices = arr.map(function (val) {
+                    return audio_1.AudioDevice.parse(val);
                 });
+                if (audioDevices.length && audioDevices.length > 0) {
+                    var micDevice = audioDevices[0];
+                    micDevice._setSystemLevel(volume);
+                    audioDevices[0] = micDevice;
+                    var dev = '';
+                    if (Array.isArray(audioDevices)) {
+                        for (var i = 0; i < audioDevices.length; ++i) {
+                            dev += audioDevices[i].toString();
+                        }
+                    }
+                    dev = '<devices>' + dev + '</devices>';
+                    app_1.App.set('microphonedev2', dev).then(function (setVal) {
+                        resolve(setVal);
+                    });
+                }
+                else {
+                    reject(Error('No audio device is set as primary microphone'));
+                }
+            });
+        });
+    };
+    /**
+     * param: hwenabled<number> (0 or 1, or set to 255 to avoid mute change)
+     * ```
+     * return: Promise<boolean>
+     * ```
+     *
+     * Sets whether the primary microphone set is enabled or disabled in the system
+     *
+     * ### Usage
+     *
+     * ```javascript
+     * App.setPrimaryMicSystemEnabled(enabled).then(function(val) {
+     *   var isSet = val;
+     * });
+     * ```
+     */
+    App.prototype.setPrimaryMicSystemEnabled = function (hwenabled) {
+        return new Promise(function (resolve, reject) {
+            if (hwenabled !== 0 && hwenabled !== 1 && hwenabled !== 255) {
+                reject(Error('Value can only be 0, 1 or 255'));
+            }
+            app_1.App.getAsList('microphonedev2').then(function (arr) {
+                var audioDevices = arr.map(function (val) {
+                    return audio_1.AudioDevice.parse(val);
+                });
+                if (audioDevices.length && audioDevices.length > 0) {
+                    var micDevice = audioDevices[0];
+                    micDevice._setSystemEnabled(hwenabled);
+                    audioDevices[0] = micDevice;
+                    var dev = '';
+                    if (Array.isArray(audioDevices)) {
+                        for (var i = 0; i < audioDevices.length; ++i) {
+                            dev += audioDevices[i].toString();
+                        }
+                    }
+                    dev = '<devices>' + dev + '</devices>';
+                    app_1.App.set('microphonedev2', dev).then(function (setVal) {
+                        resolve(setVal);
+                    });
+                }
+                else {
+                    reject(Error('No audio device is set as primary microphone'));
+                }
+            });
+        });
+    };
+    /**
+     * param: delay<number> (100 nanoseconds in units)
+     * ```
+     * return: Promise<boolean>
+     * ```
+     *
+     * Sets the loopback capture delay of the primary microphone set
+     *
+     * ### Usage
+     *
+     * ```javascript
+     * App.setPrimaryMicDelay(delay).then(function(val) {
+     *   var isSet = val;
+     * });
+     * ```
+     */
+    App.prototype.setPrimaryMicDelay = function (delay) {
+        return new Promise(function (resolve, reject) {
+            if (delay < 0) {
+                reject(Error('Delay can only be positive'));
+            }
+            app_1.App.getAsList('microphonedev2').then(function (arr) {
+                var audioDevices = arr.map(function (val) {
+                    return audio_1.AudioDevice.parse(val);
+                });
+                if (audioDevices.length && audioDevices.length > 0) {
+                    var micDevice = audioDevices[0];
+                    micDevice._setDelay(delay);
+                    audioDevices[0] = micDevice;
+                    var dev = '';
+                    if (Array.isArray(audioDevices)) {
+                        for (var i = 0; i < audioDevices.length; ++i) {
+                            dev += audioDevices[i].toString();
+                        }
+                    }
+                    dev = '<devices>' + dev + '</devices>';
+                    app_1.App.set('microphonedev2', dev).then(function (setVal) {
+                        resolve(setVal);
+                    });
+                }
+                else {
+                    reject(Error('No audio device is set as primary microphone'));
+                }
+            });
+        });
+    };
+    /**
+     * param: volume<number> (0 to 100 normal range, > 100 will boost volume level)
+     * ```
+     * return: Promise<boolean>
+     * ```
+     *
+     * Sets the application audio level of the primary speaker/audio render device
+     *
+     * ### Usage
+     *
+     * ```javascript
+     * App.setPrimarySpeakerLevel(volume).then(function(val) {
+     *   var isSet = val;
+     * });
+     * ```
+     */
+    App.prototype.setPrimarySpeakerLevel = function (volume) {
+        return new Promise(function (resolve, reject) {
+            if (volume < 0) {
+                reject(Error('Volume can only be positive'));
+            }
+            app_1.App.getAsList('microphonedev2').then(function (arr) {
+                var audioDevices = arr.map(function (val) {
+                    return audio_1.AudioDevice.parse(val);
+                });
+                if (audioDevices.length && audioDevices.length > 1) {
+                    var speakerDevice = audioDevices[1];
+                    speakerDevice._setLevel(volume);
+                    audioDevices[1] = speakerDevice;
+                    var dev = '';
+                    if (Array.isArray(audioDevices)) {
+                        for (var i = 0; i < audioDevices.length; ++i) {
+                            dev += audioDevices[i].toString();
+                        }
+                    }
+                    dev = '<devices>' + dev + '</devices>';
+                    app_1.App.set('microphonedev2', dev).then(function (setVal) {
+                        resolve(setVal);
+                    });
+                }
+                else {
+                    reject(Error('No audio device is set as primary speaker/audio render device'));
+                }
+            });
+        });
+    };
+    /**
+     * param: enabled<boolean>
+     * ```
+     * return: Promise<boolean>
+     * ```
+     *
+     * Sets whether the primary speaker/audio render device set is enabled or disabled in the applicaation
+     *
+     * ### Usage
+     *
+     * ```javascript
+     * App.setPrimarySpeakerEnabled(enabled).then(function(val) {
+     *   var isSet = val;
+     * });
+     * ```
+     */
+    App.prototype.setPrimarySpeakerEnabled = function (enabled) {
+        return new Promise(function (resolve, reject) {
+            app_1.App.getAsList('microphonedev2').then(function (arr) {
+                var audioDevices = arr.map(function (val) {
+                    return audio_1.AudioDevice.parse(val);
+                });
+                if (audioDevices.length && audioDevices.length > 1) {
+                    var speakerDevice = audioDevices[1];
+                    speakerDevice._setEnabled(enabled);
+                    audioDevices[1] = speakerDevice;
+                    var dev = '';
+                    if (Array.isArray(audioDevices)) {
+                        for (var i = 0; i < audioDevices.length; ++i) {
+                            dev += audioDevices[i].toString();
+                        }
+                    }
+                    dev = '<devices>' + dev + '</devices>';
+                    app_1.App.set('microphonedev2', dev).then(function (setVal) {
+                        resolve(setVal);
+                    });
+                }
+                else {
+                    reject(Error('No audio device is set as primary speaker/audio render device'));
+                }
+            });
+        });
+    };
+    /**
+     * param: volume<number> (0 to 100)
+     * ```
+     * return: Promise<boolean>
+     * ```
+     *
+     * Sets the system audio level of the primary speaker/audio render device set
+     *
+     * ### Usage
+     *
+     * ```javascript
+     * App.setPrimarySpeakerSystemLevel(volume).then(function(val) {
+     *   var isSet = val;
+     * });
+     * ```
+     */
+    App.prototype.setPrimarySpeakerSystemLevel = function (volume) {
+        return new Promise(function (resolve, reject) {
+            if (volume < 0) {
+                reject(Error('Volume can only be positive'));
+            }
+            app_1.App.getAsList('microphonedev2').then(function (arr) {
+                var audioDevices = arr.map(function (val) {
+                    return audio_1.AudioDevice.parse(val);
+                });
+                if (audioDevices.length && audioDevices.length > 1) {
+                    var speakerDevice = audioDevices[1];
+                    speakerDevice._setSystemLevel(volume);
+                    audioDevices[1] = speakerDevice;
+                    var dev = '';
+                    if (Array.isArray(audioDevices)) {
+                        for (var i = 0; i < audioDevices.length; ++i) {
+                            dev += audioDevices[i].toString();
+                        }
+                    }
+                    dev = '<devices>' + dev + '</devices>';
+                    app_1.App.set('microphonedev2', dev).then(function (setVal) {
+                        resolve(setVal);
+                    });
+                }
+                else {
+                    reject(Error('No audio device is set as primary speaker/audio render device'));
+                }
+            });
+        });
+    };
+    /**
+     * param: hwenabled<number> (0 or 1, or set to 255 to avoid mute change)
+     * ```
+     * return: Promise<boolean>
+     * ```
+     *
+     * Sets whether the primary speaker/audio render device set is enabled or disabled in the system
+     *
+     * ### Usage
+     *
+     * ```javascript
+     * App.setPrimarySpeakerSystemEnabled(enabled).then(function(val) {
+     *   var isSet = val;
+     * });
+     * ```
+     */
+    App.prototype.setPrimarySpeakerSystemEnabled = function (hwenabled) {
+        return new Promise(function (resolve, reject) {
+            if (hwenabled !== 0 && hwenabled !== 1 && hwenabled !== 255) {
+                reject(Error('Value can only 0, 1 or 255'));
+            }
+            app_1.App.getAsList('microphonedev2').then(function (arr) {
+                var audioDevices = arr.map(function (val) {
+                    return audio_1.AudioDevice.parse(val);
+                });
+                if (audioDevices.length && audioDevices.length > 1) {
+                    var speakerDevice = audioDevices[1];
+                    speakerDevice._setSystemEnabled(hwenabled);
+                    audioDevices[1] = speakerDevice;
+                    var dev = '';
+                    if (Array.isArray(audioDevices)) {
+                        for (var i = 0; i < audioDevices.length; ++i) {
+                            dev += audioDevices[i].toString();
+                        }
+                    }
+                    dev = '<devices>' + dev + '</devices>';
+                    app_1.App.set('microphonedev2', dev).then(function (setVal) {
+                        resolve(setVal);
+                    });
+                }
+                else {
+                    reject(Error('No audio device is set as primary speaker/audio render device'));
+                }
+            });
+        });
+    };
+    /**
+     * param: delay<number> (100 nanoseconds in units)
+     * ```
+     * return: Promise<boolean>
+     * ```
+     *
+     * Sets the loopback capture delay of the primary speaker/audio render device
+     *
+     * ### Usage
+     *
+     * ```javascript
+     * App.setPrimarySpeakerDelay(delay).then(function(val) {
+     *   var isSet = val;
+     * });
+     * ```
+     */
+    App.prototype.setPrimarySpeakerDelay = function (delay) {
+        return new Promise(function (resolve, reject) {
+            if (delay < 0) {
+                reject(Error('Delay can only be positive'));
+            }
+            app_1.App.getAsList('microphonedev2').then(function (arr) {
+                var audioDevices = arr.map(function (val) {
+                    return audio_1.AudioDevice.parse(val);
+                });
+                if (audioDevices.length && audioDevices.length > 1) {
+                    var speakerDevice = audioDevices[1];
+                    speakerDevice._setDelay(delay);
+                    audioDevices[1] = speakerDevice;
+                    var dev = '';
+                    if (Array.isArray(audioDevices)) {
+                        for (var i = 0; i < audioDevices.length; ++i) {
+                            dev += audioDevices[i].toString();
+                        }
+                    }
+                    dev = '<devices>' + dev + '</devices>';
+                    app_1.App.set('microphonedev2', dev).then(function (setVal) {
+                        resolve(setVal);
+                    });
+                }
+                else {
+                    reject(Error('No audio device is set as primary speaker/audio render device'));
+                }
             });
         });
     };
@@ -291,7 +727,7 @@ var App = (function () {
         });
     };
     /**
-     * param: (enabled: boolean)
+     * param: enabled<boolean>
      * ```
      * return: Promise<boolean>
      * ```
@@ -309,7 +745,7 @@ var App = (function () {
     App.prototype.enableSilenceDetection = function (enabled) {
         return new Promise(function (resolve) {
             app_1.App.get('microphonegain').then(function (val) {
-                var silenceDetectionObj = json_1.JSON.parse(decodeURIComponent(val));
+                var silenceDetectionObj = json_1.JSON.parse(val);
                 silenceDetectionObj['enable'] = (enabled ? '1' : '0');
                 app_1.App.set('microphonegain', xml_1.XML.parseJSON(silenceDetectionObj).toString())
                     .then(function (setVal) {
@@ -342,7 +778,7 @@ var App = (function () {
         });
     };
     /**
-     * param: (sdPeriod: number)
+     * param: sdPeriod<number>
      * ```
      * return: Promise<boolean>
      * ```
@@ -370,7 +806,7 @@ var App = (function () {
                 reject(Error('Silence detection must be in the range 0-60000.'));
             }
             app_1.App.get('microphonegain').then(function (val) {
-                var silenceDetectionObj = json_1.JSON.parse(decodeURIComponent(val));
+                var silenceDetectionObj = json_1.JSON.parse(val);
                 silenceDetectionObj['latency'] = (sdPeriod.toString());
                 app_1.App.set('microphonegain', xml_1.XML.parseJSON(silenceDetectionObj).toString())
                     .then(function (setVal) {
@@ -402,7 +838,7 @@ var App = (function () {
         });
     };
     /**
-     * param: (sdThreshold: number)
+     * param: sdThreshold<number>
      * ```
      * return: Promise<boolean>
      * ```
@@ -429,7 +865,7 @@ var App = (function () {
                 reject(Error('Silence detection threshold must be in the range 0-128.'));
             }
             app_1.App.get('microphonegain').then(function (val) {
-                var silenceDetectionObj = json_1.JSON.parse(decodeURIComponent(val));
+                var silenceDetectionObj = json_1.JSON.parse(val);
                 silenceDetectionObj['gain'] = (sdThreshold.toString());
                 app_1.App.set('microphonegain', xml_1.XML.parseJSON(silenceDetectionObj).toString())
                     .then(function (setVal) {
@@ -461,13 +897,38 @@ var App = (function () {
                     resolve(transition_1.Transition.NONE);
                 }
                 else {
-                    resolve(transition_1.Transition[val.toUpperCase()]);
+                    var currTransition = transition_1.Transition[val.toUpperCase()];
+                    if (typeof currTransition !== 'undefined') {
+                        resolve(currTransition);
+                    }
+                    else {
+                        transition_1.Transition.getSceneTransitions().then(function (transitions) {
+                            var inTransition = false;
+                            var transitionObj;
+                            var i;
+                            for (i = 0; i < transitions.length; i++) {
+                                transitionObj = transitions[i];
+                                if (transitionObj.toString() === val) {
+                                    inTransition = true;
+                                    break;
+                                }
+                            }
+                            if (inTransition) {
+                                resolve(transitionObj);
+                            }
+                            else {
+                                resolve(new transition_1.Transition(val));
+                            }
+                        }).catch(function (err) {
+                            resolve(new transition_1.Transition(val));
+                        });
+                    }
                 }
             });
         });
     };
     /**
-     * param: (transition: Transition)
+     * param: transition<Transition>
      * ```
      * return: Promise<boolean>
      * ```
@@ -516,7 +977,7 @@ var App = (function () {
         });
     };
     /**
-     * param: (time: number)
+     * param: time<number>
      * ```
      * return: Promise<boolean>
      * ```
@@ -538,10 +999,47 @@ var App = (function () {
             });
         });
     };
+    /**
+     * return: Promise<boolean>
+     *
+     *  Clears all cookies across all browser instances. Not available to
+     *  source plugins (call this from the source properties window instead.)
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * App.clearBrowserCookies().then(function(val) {
+     *  var isCleared = val;
+     * });
+     * ```
+     */
+    App.prototype.clearBrowserCookies = function () {
+        return new Promise(function (resolve, reject) {
+            if (environment_1.Environment.isSourcePlugin()) {
+                reject(new Error('This method is not available to source plugins.'));
+            }
+            else {
+                internal_1.exec('CallHost', 'deletecookie:videoitemprop');
+                resolve(true);
+            }
+        });
+    };
+    /**
+     * return: Promise<string>
+     *
+     * Returns a hashed string that may be used to differentiate among logged-in
+     * users. This will be useful in such cases as persisting data to be used by
+     * certain XSplit users only.
+     */
+    App.prototype.getUserIdHash = function () {
+        return new Promise(function (resolve) {
+            resolve(app_1.App.getGlobalProperty('userid'));
+        });
+    };
     return App;
 })();
 exports.App = App;
-},{"../internal/app":17,"../internal/util/json":22,"../internal/util/xml":24,"../system/audio":25,"../util/rectangle":34,"./transition":16}],2:[function(require,module,exports){
+},{"../internal/app":37,"../internal/internal":40,"../internal/util/json":42,"../internal/util/xml":45,"../system/audio":46,"../util/rectangle":59,"./environment":4,"./transition":36}],2:[function(require,module,exports){
 var app_1 = require('../internal/app');
 var Channel = (function () {
     /** Channel constructor (only used internally) */
@@ -628,7 +1126,171 @@ var Channel = (function () {
     return Channel;
 })();
 exports.Channel = Channel;
-},{"../internal/app":17}],3:[function(require,module,exports){
+},{"../internal/app":37}],3:[function(require,module,exports){
+/// <reference path="../../defs/es6-promise.d.ts" />
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
+var internal_1 = require('../internal/internal');
+var eventemitter_1 = require('../util/eventemitter');
+/**
+ *  The Dll class allows access to functions in DLL files that are placed within
+ *  the Scriptdlls folder.
+ *
+ *  The class also emits two events for developers to know when the user
+ *  changes the DLL permission setting for the plugin through the permissions
+ *  window.
+ *
+ *  The following events are emitted.
+ *    - `access-granted`
+ *    - `access-revoked`
+ *
+ *  Use the `on(event: string, handler: Function)` function to listen to events.
+ *
+ */
+var Dll = (function (_super) {
+    __extends(Dll, _super);
+    function Dll() {
+        _super.apply(this, arguments);
+    }
+    /**
+     *  param: (path: string)
+     *
+     *  Loads one or more DLLs for the plugin to use. Currently, only Xjs.dll is
+     *  auto-loaded and does not require loading. Loading DLLs will trigger a
+     *  notification for the user, requesting access to be granted to DLL files.
+     *  Your plugin should only call this once, at the beginning of execution.
+     *
+     *  Paths are relative to the main XBC application folder, so sample usage is:
+     *
+     *  ```javascript
+     *  Dll.load(['Scriptdlls\\SplitMediaLabs\\XjsEx.dll']);
+     *  ```
+     */
+    Dll.load = function (path) {
+        internal_1.exec('LoadDll', path.join(','));
+    };
+    /**
+     *  param: (event: string, ...params: any[])
+     *
+     *  Allows this class to emit an event.
+     */
+    Dll.emit = function (event) {
+        var params = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            params[_i - 1] = arguments[_i];
+        }
+        params.unshift(event);
+        Dll._emitter.emit.apply(Dll._emitter, params);
+    };
+    /**
+     *  param: (event: string, handler: Function)
+     *
+     *  Allows listening to events that this class emits. Currently there are two:
+     *  `access-granted` and `access-revoked`.
+     */
+    Dll.on = function (event, handler) {
+        Dll._emitter.on(event, handler);
+    };
+    /**
+     *  param: (funcName: string, ...params: string[])
+     *
+     *  return: string (see DLL documentation)
+     *
+     *  Calls a function from a loaded "safe" DLL. The only safe DLL we are
+     *  currently exposing is `Xjs.dll`.
+     */
+    Dll.call = function (func) {
+        var _this = this;
+        var params = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            params[_i - 1] = arguments[_i];
+        }
+        return new Promise(function (resolve, reject) {
+            var funcCall = 'CallDll';
+            params.unshift(func);
+            params.unshift(funcCall);
+            var retValue = internal_1.exec.apply(_this, params);
+            if (retValue !== undefined) {
+                resolve(retValue);
+            }
+            else {
+                reject('DLL call not accessible.');
+            }
+        });
+    };
+    /**
+     *  param: (funcName: string, ...params: string[])
+     *
+     *  return: string (see DLL documentation)
+     *
+     *  Calls a function from a loaded "unsafe" DLL. The first DLL containing
+     *  the function name will be called, so you need to ensure there are no
+     *  function name collisions among DLLs for functions you require.
+     *
+     *  Some DLLs have callbacks. Assign a handler function to that callback in
+     *  the global namespace, and the DLL will call that function accordingly.
+     *
+     *  See the documentation of your specific DLL for more details.
+     */
+    Dll.callEx = function (func) {
+        var _this = this;
+        var params = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            params[_i - 1] = arguments[_i];
+        }
+        return new Promise(function (resolve, reject) {
+            var funcCall = 'CallDllEx';
+            params.unshift(func);
+            params.unshift(funcCall);
+            var retValue = internal_1.exec.apply(_this, params);
+            if (retValue !== undefined) {
+                resolve(retValue);
+            }
+            else {
+                reject('DLL call not accessible.');
+            }
+        });
+    };
+    /**
+     *  return: Promise<boolean>
+     *
+     *  Determines if user has granted DLL access for this plugin, or whether
+     *  DLL security is disabled altogether.
+     */
+    Dll.isAccessGranted = function () {
+        return new Promise(function (resolve) {
+            resolve(internal_1.exec('CheckDllGrant') === '1');
+        });
+    };
+    Dll._emitter = new Dll();
+    return Dll;
+})(eventemitter_1.EventEmitter);
+exports.Dll = Dll;
+window.UpdateLocalProperty = function (prop, value) {
+    if (prop === 'prop:dlldogrant') {
+        var granted = value === '1';
+        if (granted) {
+            Dll.emit('access-granted');
+        }
+        else {
+            Dll.emit('access-revoked');
+        }
+    }
+};
+window.Setdlldogrant = function (value) {
+    var granted = value === '1';
+    if (granted) {
+        Dll.emit('access-granted');
+    }
+    else {
+        Dll.emit('access-revoked');
+    }
+};
+},{"../internal/internal":40,"../util/eventemitter":56}],4:[function(require,module,exports){
 /**
  * This class allows detection of the context in which the HTML is located.
  */
@@ -644,7 +1306,7 @@ var Environment = (function () {
         }
         Environment._isSourcePlugin = (window.external &&
             window.external['GetConfiguration'] !== undefined);
-        Environment._isSourceConfig = (window.external &&
+        Environment._isSourceProps = (window.external &&
             window.external['GetConfiguration'] === undefined &&
             window.external['GetViewId'] !== undefined &&
             window.external['GetViewId']() !== undefined);
@@ -664,10 +1326,23 @@ var Environment = (function () {
     };
     /**
      * return: boolean
-     * Determines if this HTML is running within the source configuration window.
+     *
+     * > #### For Deprecation
+     * This method is deprecated and will be removed soon. Please use
+     * {@link #core/Environment#isSourceProps isSourceProps} instead.
+     *
+     * Determines if this HTML is running within the source properties window.
      */
     Environment.isSourceConfig = function () {
-        return Environment._isSourceConfig;
+        return Environment._isSourceProps;
+    };
+    /**
+     * return: boolean
+     *
+     * Determines if this HTML is running within the source properties window.
+     */
+    Environment.isSourceProps = function () {
+        return Environment._isSourceProps;
     };
     /**
      * return: boolean
@@ -681,7 +1356,66 @@ var Environment = (function () {
 })();
 exports.Environment = Environment;
 Environment.initialize();
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
+/// <reference path="../../defs/es6-promise.d.ts" />
+var environment_1 = require('../core/environment');
+var internal_1 = require('../internal/internal');
+var Extension = (function () {
+    function Extension() {
+        if (environment_1.Environment.isExtension()) {
+            this._presName = window.location.href;
+        }
+        else {
+            throw new Error('Extension class can only be used on Extension Plugins');
+        }
+    }
+    /**
+     *  Gets the instance of the Extension class. Use this instead of the constructor.
+     */
+    Extension.getInstance = function () {
+        if (Extension._instance === undefined) {
+            Extension._instance = new Extension();
+        }
+        return Extension._instance;
+    };
+    /**
+     * param: (configObj: JSON)
+     * ```
+     * return: Promise<ExtensionWindow|Error>
+     * ```
+     *
+     * Save the configuration object to the presentation
+     */
+    Extension.prototype.saveConfig = function (configObj) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if ({}.toString.call(configObj) === '[object Object]') {
+                internal_1.exec('SetPresProperty', _this._presName, JSON.stringify(configObj));
+                resolve(_this);
+            }
+            else {
+                reject(Error('Configuration object should be in JSON format'));
+            }
+        });
+    };
+    /**
+     * return: Promise<JSON>
+     *
+     * Get the saved configuration from the presentation
+     */
+    Extension.prototype.loadConfig = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            internal_1.exec('GetPresProperty', _this._presName, function (config) {
+                var configObj = config === '' ? {} : JSON.parse(config);
+                resolve(configObj);
+            });
+        });
+    };
+    return Extension;
+})();
+exports.Extension = Extension;
+},{"../core/environment":4,"../internal/internal":40}],6:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -693,12 +1427,30 @@ var mixin_1 = require('../../internal/util/mixin');
 var item_1 = require('../../internal/item');
 var iaudio_1 = require('./iaudio');
 var item_2 = require('./item');
-var environment_1 = require('../environment');
 /**
  * The AudioItem class represents an audio device that has been added
  * to the stage.
  *
  * Inherits from: {@link #core/Item Core/Item}
+ *
+ * Implements: {@link #core/IItemAudio Core/IItemAudio}
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var XJS = require('xjs');
+ *
+ * XJS.Scene.getActiveScene().then(function(scene) {
+ *   scene.getItems().then(function(items) {
+ *     for (var i in items) {
+ *       if (items[i] instanceof XJS.AudioItem) {
+ *         // Manipulate your audio device item here
+ *         items[i].setSilenceDetectionEnabled(true);
+ *       }
+ *     }
+ *   });
+ * });
+ * ```
  *
  *  All methods marked as *Chainable* resolve with the original `AudioItem`
  *  instance.
@@ -708,99 +1460,141 @@ var AudioItem = (function (_super) {
     function AudioItem() {
         _super.apply(this, arguments);
     }
+    /**
+     * return: Promise<boolean>
+     *
+     * Check if silence detection is on or off
+     */
     AudioItem.prototype.isSilenceDetectionEnabled = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:AudioGainEnable', slot).then(function (val) {
+            item_1.Item.get('prop:AudioGainEnable', _this._id).then(function (val) {
                 resolve(val === '1');
             });
         });
     };
+    /**
+     * param: (value: boolean)
+     *
+     * Set silence detection to ON or OFF
+     *
+     * *Chainable.*
+     */
     AudioItem.prototype.setSilenceDetectionEnabled = function (value) {
         var _this = this;
         return new Promise(function (resolve, reject) {
-            if (environment_1.Environment.isSourcePlugin()) {
-                reject(Error('Source plugins cannot update audio sources properties'));
-            }
-            else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:AudioGainEnable', (value ? '1' : '0'), slot)
-                    .then(function (res) {
-                    if (!res) {
-                        reject(Error('Item set property failed'));
-                    }
-                    else {
-                        resolve(_this);
-                    }
-                });
-            }
+            item_1.Item.set('prop:AudioGainEnable', (value ? '1' : '0'), _this._id)
+                .then(function (res) {
+                resolve(_this);
+            });
         });
     };
+    /**
+     * return: Promise<number>
+     *
+     * Gets silenced detection threshold.
+     * Amplitude less than threshold will be detected as silence.
+     */
     AudioItem.prototype.getSilenceThreshold = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:AudioGain', slot).then(function (val) {
+            item_1.Item.get('prop:AudioGain', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
     };
+    /**
+     * param: (value: number)
+     *
+     * Sets silence detection threshold, min of 0, max of 128
+     *
+     * *Chainable.*
+     */
     AudioItem.prototype.setSilenceThreshold = function (value) {
         var _this = this;
         return new Promise(function (resolve, reject) {
-            if (environment_1.Environment.isSourcePlugin()) {
-                reject(Error('Source plugins cannot update audio sources properties'));
-            }
-            else if (typeof value !== 'number') {
+            if (typeof value !== 'number') {
                 reject(Error('Only numbers are acceptable values for threshold'));
             }
             else if (value % 1 !== 0 || value < 0 || value > 128) {
                 reject(Error('Only integers in the range 0-128 are acceptable for threshold'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:AudioGain', String(value), slot).then(function (res) {
-                    if (!res) {
-                        reject(Error('Item set property failed'));
-                    }
-                    else {
-                        resolve(_this);
-                    }
+                item_1.Item.set('prop:AudioGain', String(value), _this._id).then(function (res) {
+                    resolve(_this);
                 });
             }
         });
     };
+    /**
+     * return: Promise<number>
+     *
+     * Gets silenced detection period in ms time unit.
+     * Reaction time before filter removes noice/sound less than threshold
+     */
     AudioItem.prototype.getSilencePeriod = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:AudioGainLatency', slot).then(function (val) {
+            item_1.Item.get('prop:AudioGainLatency', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
     };
+    /**
+     * param: (value: number)
+     *
+     * Sets silence detection period, min of 0, max of 10000
+     *
+     * *Chainable.*
+     */
     AudioItem.prototype.setSilencePeriod = function (value) {
         var _this = this;
         return new Promise(function (resolve, reject) {
-            if (environment_1.Environment.isSourcePlugin()) {
-                reject(Error('Source plugins cannot update audio sources properties'));
-            }
-            else if (typeof value !== 'number') {
+            if (typeof value !== 'number') {
                 reject(Error('Only numbers are acceptable values for period'));
             }
             else if (value % 1 !== 0 || value < 0 || value > 10000) {
                 reject(Error('Only integers in the range 0-10000 are acceptable for period'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:AudioGainLatency', String(value), slot).then(function (res) {
-                    if (!res) {
-                        reject(Error('Item set property failed'));
-                    }
-                    else {
-                        resolve(_this);
-                    }
+                item_1.Item.set('prop:AudioGainLatency', String(value), _this._id).then(function (res) {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    /**
+     * return: Promise<number>
+     *
+     * Gets audio delay (1 unit = 100ns)
+     */
+    AudioItem.prototype.getAudioOffset = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:AudioDelay', _this._id).then(function (val) {
+                resolve(Number(val));
+            });
+        });
+    };
+    /**
+     * param: (value: number)
+     *
+     * Sets audio delay, accepts only positive delay
+     *
+     * *Chainable.*
+     */
+    AudioItem.prototype.setAudioOffset = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof value !== 'number') {
+                reject(Error('Only numbers are acceptable values for period'));
+            }
+            else if (value < 0) {
+                reject(Error('Audio offset cannot be negative'));
+            }
+            else {
+                item_1.Item.set('prop:AudioDelay', String(value), _this._id).then(function (res) {
+                    resolve(_this);
                 });
             }
         });
@@ -808,8 +1602,8 @@ var AudioItem = (function (_super) {
     return AudioItem;
 })(item_2.Item);
 exports.AudioItem = AudioItem;
-mixin_1.applyMixins(item_2.Item, [iaudio_1.ItemAudio]);
-},{"../../internal/item":21,"../../internal/util/mixin":23,"../environment":3,"./iaudio":8,"./item":13}],5:[function(require,module,exports){
+mixin_1.applyMixins(AudioItem, [iaudio_1.ItemAudio]);
+},{"../../internal/item":41,"../../internal/util/mixin":43,"./iaudio":12,"./item":20}],7:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -822,8 +1616,11 @@ var item_1 = require('../../internal/item');
 var ilayout_1 = require('./ilayout');
 var icolor_1 = require('./icolor');
 var ichroma_1 = require('./ichroma');
+var ieffects_1 = require('./ieffects');
 var itransition_1 = require('./itransition');
+var iaudio_1 = require('./iaudio');
 var item_2 = require('./item');
+var system_1 = require('../../system/system');
 /**
  * The CameraItem Class provides methods specifically used for camera items and
  * also methods that are shared between Item Classes. The
@@ -831,6 +1628,13 @@ var item_2 = require('./item');
  * CameraItem object if there's a camera item on the specified scene.
  *
  * Inherits from: {@link #core/Item Core/Item}
+ *
+ * Implements: {@link #core/IItemChroma Core/IItemChroma},
+ * {@link #core/IItemColor Core/IItemColor},
+ * {@link #core/IItemLayout Core/IItemLayout},
+ * {@link #core/IItemTransition Core/IItemTransition},
+ * {@link #core/IItemAudio Core/IItemAudio},
+ * {@link #core/IItemEffect Core/IItemEffect}
  *
  * ### Basic Usage
  *
@@ -858,6 +1662,11 @@ var CameraItem = (function (_super) {
     __extends(CameraItem, _super);
     function CameraItem() {
         _super.apply(this, arguments);
+        this._delayExclusionObject = {
+            roxio: "vid_1b80&pid_e0(01|11|12)",
+            hauppauge1: "vid_2040&pid_49(0[0-3]|8[0-3])",
+            hauppauge2: "vid_2040&pid_e50[012a4]"
+        };
     }
     /**
      * return: Promise<string>
@@ -867,15 +1676,302 @@ var CameraItem = (function (_super) {
     CameraItem.prototype.getDeviceId = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:item', slot).then(function (val) {
+            item_1.Item.get('prop:item', _this._id).then(function (val) {
                 resolve(val);
+            });
+        });
+    };
+    /**
+     * return: Promise<boolean>
+     *
+     * Checks if camera feed is paused
+     */
+    CameraItem.prototype.isStreamPaused = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:StreamPause', _this._id).then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    /**
+     * param: (value: boolean)
+     *
+     * Sets whether camera feed is paused or not
+     *
+     * *Chainable.*
+     */
+    CameraItem.prototype.setStreamPaused = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            item_1.Item.set('prop:StreamPause', value ? '1' : '0', _this._id).then(function () {
+                return item_1.Item.get('prop:StreamPause', _this._id);
+            }).then(function (val) {
+                if (value === (val === ('1'))) {
+                    resolve(_this);
+                }
+                else {
+                    reject(new Error('Camera feed cannot be paused/resumed or is not present'));
+                }
+            });
+        });
+    };
+    /**
+     * return: Promise<boolean>
+     *
+     * Checks if camera device is a hardware encoder or not. This check may fail
+     * if camera device is reinitializing or not present (value defaults to false)
+     *
+     */
+    CameraItem.prototype.isHardwareEncoder = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            item_1.Item.get('prop:hwencoder', _this._id).then(function (val) {
+                if (val === '1') {
+                    resolve(true);
+                }
+                else {
+                    _this.isActive().then(function (isActive) {
+                        if (isActive) {
+                            resolve(false);
+                        }
+                        else {
+                            reject(new Error('Cannot check hardware encoding. Device not present'));
+                        }
+                    });
+                }
+            });
+        });
+    };
+    /**
+     * return: Promise<boolean>
+     *
+     * Checks if camera device is active and present.
+     *
+     */
+    CameraItem.prototype.isActive = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:activestate', _this._id).then(function (val) {
+                resolve(val === 'active');
+            });
+        });
+    };
+    /**
+     * return: Promise<number>
+     *
+     * Gets feed capture delay in milliseconds
+     */
+    CameraItem.prototype.getDelay = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var streamDelay, audioDelay;
+            item_1.Item.get('prop:StreamDelay', _this._id).then(function (val) {
+                streamDelay = Number(val);
+                return item_1.Item.get('prop:AudioDelay', _this._id);
+            }).then(function (val) {
+                audioDelay = Number(val);
+                if (streamDelay < audioDelay) {
+                    resolve(streamDelay / 10000);
+                }
+                else {
+                    resolve(audioDelay / 10000);
+                }
+            });
+        });
+    };
+    /**
+     * param: (value: number)
+     *
+     * Sets feed capture delay in milliseconds, accepts only positive delay
+     *
+     * *Chainable.*
+     */
+    CameraItem.prototype.setDelay = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            var isPositive, audioOffset;
+            _this.isHardwareEncoder().then(function (val) {
+                if (val === true) {
+                    reject(new Error('Cannot set delay to hardware encoder devices'));
+                }
+                else {
+                    return _this.getValue();
+                }
+            }).then(function (val) {
+                for (var key in _this._delayExclusionObject) {
+                    var regex = new RegExp(_this._delayExclusionObject[key].toLowerCase(), 'g');
+                    if (typeof val === 'string' && val.toLowerCase().match(regex) != null) {
+                        reject(new Error('Cannot set delay to specific device'));
+                        break;
+                    }
+                }
+                return _this.getAudioOffset();
+            }).then(function (val) {
+                audioOffset = val;
+                if (audioOffset >= 0) {
+                    isPositive = true;
+                    return item_1.Item.set('prop:StreamDelay', String(value * 10000), _this._id);
+                }
+                else {
+                    isPositive = false;
+                    return item_1.Item.set('prop:StreamDelay', String((value + (audioOffset * -1)) * 10000), _this._id);
+                }
+            }).then(function (val) {
+                if (isPositive) {
+                    return item_1.Item.set('prop:AudioDelay', String((value + audioOffset) * 10000), _this._id);
+                }
+                else {
+                    return item_1.Item.set('prop:AudioDelay', String(value * 10000), _this._id);
+                }
+            }).then(function (val) {
+                resolve(_this);
+            });
+        });
+    };
+    /**
+     * return: Promise<number>
+     *
+     * Gets audio delay with respect to video feed in milliseconds
+     */
+    CameraItem.prototype.getAudioOffset = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var streamDelay, audioDelay;
+            item_1.Item.get('prop:StreamDelay', _this._id).then(function (val) {
+                streamDelay = Number(val);
+                return item_1.Item.get('prop:AudioDelay', _this._id);
+            }).then(function (val) {
+                audioDelay = Number(val);
+                resolve((audioDelay - streamDelay) / 10000);
+            });
+        });
+    };
+    /**
+     * param: (value: number)
+     *
+     * Sets audio delay with respect to video feed in milliseconds
+     *
+     * *Chainable.*
+     */
+    CameraItem.prototype.setAudioOffset = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            var itemAudio, delay;
+            item_1.Item.get('prop:itemaudio', _this._id).then(function (val) {
+                itemAudio = val;
+                return _this.isAudioAvailable();
+            }).then(function (val) {
+                if (val === false && itemAudio === '') {
+                    reject(new Error('Device has no audio'));
+                }
+                else {
+                    return _this.getDelay();
+                }
+            }).then(function (val) {
+                delay = val;
+                if (value >= 0) {
+                    return item_1.Item.set('prop:StreamDelay', String(delay * 10000), _this._id);
+                }
+                else {
+                    return item_1.Item.set('prop:StreamDelay', String((delay + (value * -1)) * 10000), _this._id);
+                }
+            }).then(function (val) {
+                if (value >= 0) {
+                    return item_1.Item.set('prop:AudioDelay', String((delay + value) * 10000), _this._id);
+                }
+                else {
+                    return item_1.Item.set('prop:AudioDelay', String(delay * 10000), _this._id);
+                }
+            }).then(function (val) {
+                resolve(_this);
+            });
+        });
+    };
+    /**
+     * return: Promise<MicrophoneDevice>
+     *
+     * Gets the microphone device tied as an audio input,
+     * rejected if no microphone device is used
+     */
+    CameraItem.prototype.getAudioInput = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            var itemAudioId;
+            item_1.Item.get('prop:itemaudio', _this._id).then(function (val) {
+                if (val === '') {
+                    reject(new Error('No tied audio input'));
+                }
+                else {
+                    itemAudioId = val;
+                    return system_1.System.getMicrophones();
+                }
+            }).then(function (val) {
+                var micDevice;
+                if (val !== undefined) {
+                    for (var i = 0; i < val.length; ++i) {
+                        if (val[i].getDisplayId() === itemAudioId) {
+                            micDevice = val[i];
+                            break;
+                        }
+                    }
+                }
+                if (micDevice !== undefined) {
+                    resolve(micDevice);
+                }
+                else {
+                    reject(new Error('Tied audio input not present'));
+                }
+            });
+        });
+    };
+    /**
+     * param: (value: number)
+     *
+     * Sets the microphone device to be tied as an audio input
+     *
+     * *Chainable.*
+     */
+    CameraItem.prototype.setAudioInput = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            item_1.Item.set('prop:itemaudio', value.getDisplayId(), _this._id)
+                .then(function (val) {
+                resolve(_this);
+            });
+        });
+    };
+    /**
+     * return: Promise<boolean>
+     *
+     * Checks whether deinterlacing is enforced
+     */
+    CameraItem.prototype.isForceDeinterlace = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:fdeinterlace', _this._id).then(function (val) {
+                resolve(val === '3');
+            });
+        });
+    };
+    /**
+     * param: (value: boolean)
+     *
+     * Enables or disables forcing of deinterlacing
+     *
+     * *Chainable.*
+     */
+    CameraItem.prototype.setForceDeinterlace = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:fdeinterlace', (value ? '3' : '0'), _this._id).then(function () {
+                resolve(_this);
             });
         });
     };
     // special color options pinning
     /**
-     * param: value<boolean>
+     * param: (value: boolean)
      *
      * Set this to true to share color settings across all instances of this
      * camera device on the stage.
@@ -885,8 +1981,7 @@ var CameraItem = (function (_super) {
     CameraItem.prototype.setColorOptionsPinned = function (value) {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.set('prop:cc_pin', value ? '1' : '0', slot).then(function () {
+            item_1.Item.set('prop:cc_pin', value ? '1' : '0', _this._id).then(function () {
                 resolve(_this);
             });
         });
@@ -900,8 +1995,7 @@ var CameraItem = (function (_super) {
     CameraItem.prototype.getColorOptionsPinned = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:cc_pin', slot).then(function (val) {
+            item_1.Item.get('prop:cc_pin', _this._id).then(function (val) {
                 resolve(val === '1' ? true : false);
             });
         });
@@ -918,8 +2012,7 @@ var CameraItem = (function (_super) {
     CameraItem.prototype.setKeyingOptionsPinned = function (value) {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.set('prop:key_pin', value ? '1' : '0', slot).then(function () {
+            item_1.Item.set('prop:key_pin', value ? '1' : '0', _this._id).then(function () {
                 resolve(_this);
             });
         });
@@ -933,8 +2026,7 @@ var CameraItem = (function (_super) {
     CameraItem.prototype.getKeyingOptionsPinned = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:key_pin', slot).then(function (val) {
+            item_1.Item.get('prop:key_pin', _this._id).then(function (val) {
                 resolve(val === '1' ? true : false);
             });
         });
@@ -942,8 +2034,75 @@ var CameraItem = (function (_super) {
     return CameraItem;
 })(item_2.Item);
 exports.CameraItem = CameraItem;
-mixin_1.applyMixins(CameraItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition]);
-},{"../../internal/item":21,"../../internal/util/mixin":23,"./ichroma":9,"./icolor":10,"./ilayout":12,"./item":13,"./itransition":14}],6:[function(require,module,exports){
+mixin_1.applyMixins(CameraItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition,
+    iaudio_1.ItemAudio, ieffects_1.ItemEffect]);
+},{"../../internal/item":41,"../../internal/util/mixin":43,"../../system/system":52,"./iaudio":12,"./ichroma":13,"./icolor":14,"./ieffects":16,"./ilayout":17,"./item":20,"./itransition":21}],8:[function(require,module,exports){
+/**
+ *  A CuePoint represents a configurable object for items that
+ *  support cue points. Check `getCuePoints()` and other related methods of
+ *  {@link #core/MediaItem#getCuePoints Core/MediaItem}.
+ */
+var CuePoint = (function () {
+    function CuePoint(time, action) {
+        this._time = time;
+        this._action = action;
+    }
+    CuePoint.prototype.toString = function () {
+        return String(this._time * 10000000) + this._action;
+    };
+    /**
+     * param: number
+     *
+     * Sets this cue point's time in seconds, with precision up to 100ns.
+     */
+    CuePoint.prototype.setTime = function (time) {
+        this._time = time;
+    };
+    /**
+     *  param: string
+     *
+     *  Sets the action to be performed on the cue point. Choose any of the
+     *  following values: CuePoint.PAUSE, CuePoint.RESUME, CuePoint.CUT.
+     */
+    CuePoint.prototype.setAction = function (action) {
+        if (action === CuePoint.PAUSE || action === CuePoint.RESUME ||
+            action === CuePoint.CUT) {
+            this._action = action;
+        }
+        else {
+            throw new Error('Trying to set to an invalid Cue Point action.');
+        }
+    };
+    /**
+     * return: number
+     *
+     * Gets the time in seconds corresponding to this cue point, with precision
+     * up to 100ns.
+     */
+    CuePoint.prototype.getTime = function () {
+        return this._time / 10000000;
+    };
+    /**
+     *  return: string
+     *
+     *  Gets the action to be performed on the cue point, which may be any of the
+     *  following: CuePoint.PAUSE, CuePoint.RESUME, CuePoint.CUT.
+     */
+    CuePoint.prototype.getAction = function () {
+        return this._action;
+    };
+    CuePoint._fromString = function (value) {
+        var _a = [value.substring(0, value.length - 1),
+            value.charAt(value.length - 1)], time = _a[0], action = _a[1];
+        return new CuePoint(Number(time), action);
+    };
+    CuePoint.PAUSE = 'p';
+    CuePoint.RESUME = 'r';
+    CuePoint.CUT = 's';
+    return CuePoint;
+})();
+exports.CuePoint = CuePoint;
+},{}],9:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -956,6 +2115,148 @@ var item_1 = require('../../internal/item');
 var ilayout_1 = require('./ilayout');
 var icolor_1 = require('./icolor');
 var ichroma_1 = require('./ichroma');
+var ieffects_1 = require('./ieffects');
+var itransition_1 = require('./itransition');
+var iaudio_1 = require('./iaudio');
+var item_2 = require('./item');
+var rectangle_1 = require('../../util/rectangle');
+/**
+ * The FlashItem class represents a flash item, which is any SWF file
+ * loaded to XSplit Broadcaster.
+ *
+ * Inherits from: {@link #core/Item Core/Item}
+ *
+ * Implements: {@link #core/IItemChroma Core/IItemChroma},
+ * {@link #core/IItemColor Core/IItemColor},
+ * {@link #core/IItemLayout Core/IItemLayout},
+ * {@link #core/IItemTransition Core/IItemTransition},
+ * {@link #core/IItemAudio Core/IItemAudio},
+ * {@link #core/IItemEffect Core/IItemEffect}
+ *
+ *  All methods marked as *Chainable* resolve with the original `FlashItem`
+ * instance. Also, any audio setting, i.e. volume, mute, stream only
+ * may not be properly reflected in the item unless native flash audio support
+ * is enabled. (Tools menu > General Settings > Advanced tab)
+ */
+var FlashItem = (function (_super) {
+    __extends(FlashItem, _super);
+    function FlashItem() {
+        _super.apply(this, arguments);
+    }
+    /**
+     * return: Promise<Rectangle>
+     *
+     * Gets the custom resolution (in pixels) for the item, if set,
+     * regardless of its layout on the mixer. Returns a (0, 0) Rectangle if no
+     * custom resolution has been set.
+     *
+     * See also: {@link #util/Rectangle Util/Rectangle}
+     */
+    FlashItem.prototype.getCustomResolution = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var customSize;
+            item_1.Item.get('prop:BrowserSize', _this._id).then(function (val) {
+                if (val !== '') {
+                    var _a = decodeURIComponent(val).split(','), width = _a[0], height = _a[1];
+                    customSize = rectangle_1.Rectangle.fromDimensions(Number(width), Number(height));
+                }
+                else {
+                    customSize = rectangle_1.Rectangle.fromDimensions(0, 0);
+                }
+                resolve(customSize);
+            });
+        });
+    };
+    /**
+     * param: (value: Rectangle)
+     * ```
+     * return: Promise<FlashItem>
+     * ```
+     *
+     * Sets the custom resolution for the item
+     * regardless of its layout on the mixer
+     *
+     * *Chainable.*
+     *
+     * See also: {@link #util/Rectangle Util/Rectangle}
+     */
+    FlashItem.prototype.setCustomResolution = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:BrowserSize', value.toDimensionString(), _this._id).then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    /**
+     * return: Promise<boolean>
+     *
+     * Check if right click events are sent to the item or not.
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * item.getAllowRightClick().then(function(isRightClickAllowed) {
+     *   // The rest of your code here
+     * });
+     * ```
+     */
+    FlashItem.prototype.getAllowRightClick = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:BrowserRightClick', _this._id).then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    /**
+     * param: (value:boolean)
+     * ```
+     * return: Promise<Item>
+     * ```
+     *
+     * Allow or disallow right click events to be sent to the item. Note that
+     * you can only catch right click events using `mouseup/mousedown`
+     *
+     * *Chainable*
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * item.setAllowRightClick(true).then(function(item) {
+     *   // Promise resolves with the same Item instance
+     * });
+     * ```
+     */
+    FlashItem.prototype.setAllowRightClick = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:BrowserRightClick', (value ? '1' : '0'), _this._id)
+                .then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    return FlashItem;
+})(item_2.Item);
+exports.FlashItem = FlashItem;
+mixin_1.applyMixins(FlashItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition,
+    iaudio_1.ItemAudio, ieffects_1.ItemEffect]);
+},{"../../internal/item":41,"../../internal/util/mixin":43,"../../util/rectangle":59,"./iaudio":12,"./ichroma":13,"./icolor":14,"./ieffects":16,"./ilayout":17,"./item":20,"./itransition":21}],10:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
+var mixin_1 = require('../../internal/util/mixin');
+var item_1 = require('../../internal/item');
+var ilayout_1 = require('./ilayout');
+var icolor_1 = require('./icolor');
+var ichroma_1 = require('./ichroma');
+var ieffects_1 = require('./ieffects');
 var itransition_1 = require('./itransition');
 var item_2 = require('./item');
 var json_1 = require('../../internal/util/json');
@@ -969,6 +2270,12 @@ var environment_1 = require('../environment');
  * GameItem object if there's a game item on the specified scene.
  *
  * Inherits from: {@link #core/Item Core/Item}
+ *
+ * Implements: {@link #core/IItemChroma Core/IItemChroma},
+ * {@link #core/IItemColor Core/IItemColor},
+ * {@link #core/IItemLayout Core/IItemLayout},
+ * {@link #core/IItemTransition Core/IItemTransition},
+ * {@link #core/IItemEffect Core/IItemEffect}
  *
  * ### Basic Usage
  *
@@ -1003,8 +2310,7 @@ var GameItem = (function (_super) {
     GameItem.prototype.isSpecialOptimizationEnabled = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('GameCapSurfSharing').then(function (res) {
+            item_1.Item.get('GameCapSurfSharing', _this._id).then(function (res) {
                 resolve(res === '1');
             });
         });
@@ -1019,8 +2325,7 @@ var GameItem = (function (_super) {
     GameItem.prototype.setSpecialOptimizationEnabled = function (value) {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.set('GameCapSurfSharing', (value ? '1' : '0'), slot).then(function () {
+            item_1.Item.set('GameCapSurfSharing', (value ? '1' : '0'), _this._id).then(function () {
                 resolve(_this);
             });
         });
@@ -1033,14 +2338,13 @@ var GameItem = (function (_super) {
     GameItem.prototype.isShowMouseEnabled = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('GameCapShowMouse').then(function (res) {
+            item_1.Item.get('GameCapShowMouse', _this._id).then(function (res) {
                 resolve(res === '1');
             });
         });
     };
     /**
-     * param: value<boolean>
+     * param: (value: boolean)
      *
      * Set Show Mouse in game to on or off
      *
@@ -1049,8 +2353,7 @@ var GameItem = (function (_super) {
     GameItem.prototype.setShowMouseEnabled = function (value) {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.set('GameCapShowMouse', (value ? '1' : '0'), slot).then(function () {
+            item_1.Item.set('GameCapShowMouse', (value ? '1' : '0'), _this._id).then(function () {
                 resolve(_this);
             });
         });
@@ -1058,7 +2361,7 @@ var GameItem = (function (_super) {
     /**
      * param: path<string>
      *
-     * Set the offline image of a game source
+     * Set the offline image of a game item
      *
      * *Chainable.*
      */
@@ -1066,10 +2369,10 @@ var GameItem = (function (_super) {
         var _this = this;
         return new Promise(function (resolve, reject) {
             if (_this._type !== item_3.ItemTypes.GAMESOURCE) {
-                reject(Error('Current item should be a game source'));
+                reject(Error('Current item should be a game item'));
             }
             else if (environment_1.Environment.isSourcePlugin()) {
-                reject(Error('Source plugins cannot update offline images of other sources'));
+                reject(Error('Source plugins cannot update offline images of other items'));
             }
             else if (!(_this._value instanceof xml_1.XML)) {
                 _this.getValue().then(function () {
@@ -1094,13 +2397,13 @@ var GameItem = (function (_super) {
     /**
      * return: Promise<string>
      *
-     * Get the offline image of a game source
+     * Get the offline image of a game item
      */
     GameItem.prototype.getOfflineImage = function () {
         var _this = this;
         return new Promise(function (resolve, reject) {
             if (_this._type !== item_3.ItemTypes.GAMESOURCE) {
-                reject(Error('Current item should be a game source'));
+                reject(Error('Current item should be a game item'));
             }
             else {
                 _this.getValue().then(function () {
@@ -1113,8 +2416,9 @@ var GameItem = (function (_super) {
     return GameItem;
 })(item_2.Item);
 exports.GameItem = GameItem;
-mixin_1.applyMixins(GameItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition]);
-},{"../../internal/item":21,"../../internal/util/json":22,"../../internal/util/mixin":23,"../../internal/util/xml":24,"../environment":3,"./ichroma":9,"./icolor":10,"./ilayout":12,"./item":13,"./itransition":14}],7:[function(require,module,exports){
+mixin_1.applyMixins(GameItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition,
+    ieffects_1.ItemEffect]);
+},{"../../internal/item":41,"../../internal/util/json":42,"../../internal/util/mixin":43,"../../internal/util/xml":45,"../environment":4,"./ichroma":13,"./icolor":14,"./ieffects":16,"./ilayout":17,"./item":20,"./itransition":21}],11:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -1128,35 +2432,62 @@ var item_1 = require('../../internal/item');
 var ilayout_1 = require('./ilayout');
 var icolor_1 = require('./icolor');
 var ichroma_1 = require('./ichroma');
+var ieffects_1 = require('./ieffects');
 var itransition_1 = require('./itransition');
 var iconfig_1 = require('./iconfig');
+var iaudio_1 = require('./iaudio');
 var item_2 = require('./item');
 var rectangle_1 = require('../../util/rectangle');
 var environment_1 = require('../environment');
 /**
- * The HTMLItem class represents a web page source. This covers both source
+ * The HtmlItem class represents a web page item. This covers both item
  * plugins and non-plugin URLs.
  *
  * Inherits from: {@link #core/Item Core/Item}
  *
- *  All methods marked as *Chainable* resolve with the original `HTMLItem`
- *  instance.
+ * Implements: {@link #core/IItemChroma Core/IItemChroma},
+ * {@link #core/IItemColor Core/IItemColor},
+ * {@link #core/IItemLayout Core/IItemLayout},
+ * {@link #core/IItemTransition Core/IItemTransition},
+ * {@link #core/IItemAudio Core/IItemAudio},
+ * {@link #core/IItemConfigurable Core/IItemConfigurable}
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var XJS = require('xjs');
+ *
+ * XJS.Scene.getActiveScene().then(function(scene) {
+ *   scene.getItems().then(function(items) {
+ *     for (var i in items) {
+ *       if (items[i] instanceof XJS.HtmlItem) {
+ *         // Manipulate your HTML item here
+ *         items[i].enableBrowserTransparency(true);
+ *       }
+ *     }
+ *   });
+ * });
+ * ```
+ *
+ *  All methods marked as *Chainable* resolve with the original `HtmlItem`
+ * instance. Also, any audio setting, i.e. volume, mute, stream only
+ * may not be properly reflected in the item unless native browser audio support
+ * is enabled. (Tools menu > General Settings > Advanced tab)
  */
-var HTMLItem = (function (_super) {
-    __extends(HTMLItem, _super);
-    function HTMLItem() {
+var HtmlItem = (function (_super) {
+    __extends(HtmlItem, _super);
+    function HtmlItem() {
         _super.apply(this, arguments);
     }
     /**
      * return: Promise<string>
      *
-     * Gets the URL of this webpage source.
+     * Gets the URL of this webpage item.
      */
-    HTMLItem.prototype.getURL = function () {
+    HtmlItem.prototype.getURL = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:item', slot).then(function (url) {
+            item_1.Item.get('prop:item', _this._id).then(function (url) {
                 var _url = String(url).split('*');
                 url = _url[0];
                 resolve(url);
@@ -1166,18 +2497,17 @@ var HTMLItem = (function (_super) {
     /**
      * param: (url: string)
      * ```
-     * return: Promise<HTMLItem>
+     * return: Promise<HtmlItem>
      * ```
      *
-     * Sets the URL of this webpage source.
+     * Sets the URL of this webpage item.
      *
      * *Chainable.*
      */
-    HTMLItem.prototype.setURL = function (value) {
+    HtmlItem.prototype.setURL = function (value) {
         var _this = this;
         return new Promise(function (resolve, reject) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.set('prop:item', value, slot).then(function (code) {
+            item_1.Item.set('prop:item', value, _this._id).then(function (code) {
                 if (code) {
                     resolve(_this);
                 }
@@ -1190,13 +2520,12 @@ var HTMLItem = (function (_super) {
     /**
      * return: Promise<string>
      *
-     * Gets the javascript commands to be executed on source upon load
+     * Gets the javascript commands to be executed on item upon load
      */
-    HTMLItem.prototype.getBrowserJS = function () {
+    HtmlItem.prototype.getBrowserJS = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:custom', slot).then(function (custom) {
+            item_1.Item.get('prop:custom', _this._id).then(function (custom) {
                 var customJS = '';
                 try {
                     var customObject = JSON.parse(custom);
@@ -1213,22 +2542,21 @@ var HTMLItem = (function (_super) {
     /**
      * param: (js: string, refresh: boolean = false)
      * ```
-     * return: Promise<HTMLItem>
+     * return: Promise<HtmlItem>
      * ```
      *
-     * Sets the javascript commands to be executed on source
+     * Sets the javascript commands to be executed on item
      * right upon setting and on load. Optionally set second parameter
-     * to true to refresh source (needed to clean previously executed JS code.)
+     * to true to refresh item (needed to clean previously executed JS code.)
      *
      * *Chainable.*
      */
-    HTMLItem.prototype.setBrowserJS = function (value, refresh) {
+    HtmlItem.prototype.setBrowserJS = function (value, refresh) {
         var _this = this;
         if (refresh === void 0) { refresh = false; }
         return new Promise(function (resolve, reject) {
-            var slot = item_1.Item.attach(_this._id);
             var customObject = {};
-            item_1.Item.get('prop:custom', slot).then(function (custom) {
+            item_1.Item.get('prop:custom', _this._id).then(function (custom) {
                 var customJS = '';
                 var customCSS = '';
                 var scriptString = ' ';
@@ -1259,19 +2587,19 @@ var HTMLItem = (function (_super) {
                 if (value !== '' && scriptEnabled === true) {
                     scriptString = scriptString + value;
                 }
-                return item_1.Item.set('prop:BrowserJs', scriptString, slot);
+                return item_1.Item.set('prop:BrowserJs', scriptString, _this._id);
             })
                 .then(function () {
-                return item_1.Item.set('prop:custom', JSON.stringify(customObject), slot);
+                return item_1.Item.set('prop:custom', JSON.stringify(customObject), _this._id);
             })
                 .then(function () {
                 if (refresh) {
-                    item_1.Item.set('refresh', '', slot).then(function () {
-                        resolve(this);
+                    item_1.Item.set('refresh', '', _this._id).then(function () {
+                        resolve(_this);
                     });
                 }
                 else {
-                    resolve(this);
+                    resolve(_this);
                 }
             });
         });
@@ -1281,11 +2609,10 @@ var HTMLItem = (function (_super) {
      *
      * Gets if BrowserJS is enabled and executed on load
      */
-    HTMLItem.prototype.isBrowserJSEnabled = function () {
+    HtmlItem.prototype.isBrowserJSEnabled = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:custom', slot).then(function (custom) {
+            item_1.Item.get('prop:custom', _this._id).then(function (custom) {
                 var enabled = true;
                 try {
                     var customObject = JSON.parse(custom);
@@ -1300,23 +2627,22 @@ var HTMLItem = (function (_super) {
         });
     };
     /**
-     * param: value<string>
+     * param: (value: boolean)
      * ```
-     * return: Promise<HTMLItem>
+     * return: Promise<HtmlItem>
      * ```
      *
      * Enables or disables execution of the set BrowserJs upon load.
-     * Note that disabling this will require source to be refreshed
+     * Note that disabling this will require item to be refreshed
      * in order to remove any BrowserJS previously executed.
      *
      * *Chainable.*
      */
-    HTMLItem.prototype.enableBrowserJS = function (value) {
+    HtmlItem.prototype.enableBrowserJS = function (value) {
         var _this = this;
         return new Promise(function (resolve, reject) {
-            var slot = item_1.Item.attach(_this._id);
             var customObject = {};
-            item_1.Item.get('prop:custom', slot).then(function (custom) {
+            item_1.Item.get('prop:custom', _this._id).then(function (custom) {
                 var customJS = '';
                 var customCSS = '';
                 var scriptString = ' ';
@@ -1357,19 +2683,19 @@ var HTMLItem = (function (_super) {
                 if (customJS !== '' && value === true) {
                     scriptString = scriptString + customJS;
                 }
-                return item_1.Item.set('prop:BrowserJs', scriptString, slot);
+                return item_1.Item.set('prop:BrowserJs', scriptString, _this._id);
             })
                 .then(function () {
-                return item_1.Item.set('prop:custom', JSON.stringify(customObject), slot);
+                return item_1.Item.set('prop:custom', JSON.stringify(customObject), _this._id);
             })
                 .then(function () {
                 if (!value) {
-                    item_1.Item.set('refresh', '', slot).then(function () {
-                        resolve(this);
+                    item_1.Item.set('refresh', '', _this._id).then(function () {
+                        resolve(_this);
                     });
                 }
                 else {
-                    resolve(this);
+                    resolve(_this);
                 }
             });
         });
@@ -1379,11 +2705,10 @@ var HTMLItem = (function (_super) {
      *
      * Gets the custom CSS applied to the document upon loading
      */
-    HTMLItem.prototype.getCustomCSS = function () {
+    HtmlItem.prototype.getCustomCSS = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:custom', slot).then(function (custom) {
+            item_1.Item.get('prop:custom', _this._id).then(function (custom) {
                 var customCSS = '';
                 try {
                     var customObject = JSON.parse(custom);
@@ -1398,21 +2723,20 @@ var HTMLItem = (function (_super) {
         });
     };
     /**
-     * param: value<string>
+     * param: (value: string)
      * ```
-     * return: Promise<HTMLItem>
+     * return: Promise<HtmlItem>
      * ```
      *
      * Sets the custom CSS to be applied to the document upon loading
      *
      * *Chainable.*
      */
-    HTMLItem.prototype.setCustomCSS = function (value) {
+    HtmlItem.prototype.setCustomCSS = function (value) {
         var _this = this;
         return new Promise(function (resolve, reject) {
-            var slot = item_1.Item.attach(_this._id);
             var customObject = {};
-            item_1.Item.get('prop:custom', slot).then(function (custom) {
+            item_1.Item.get('prop:custom', _this._id).then(function (custom) {
                 var customJS = '';
                 var customCSS = '';
                 var scriptString = ' ';
@@ -1453,26 +2777,25 @@ var HTMLItem = (function (_super) {
                 if (customJS !== '' && scriptEnabled === true) {
                     scriptString = scriptString + customJS;
                 }
-                return item_1.Item.set('prop:BrowserJs', scriptString, slot);
+                return item_1.Item.set('prop:BrowserJs', scriptString, _this._id);
             })
                 .then(function () {
-                return item_1.Item.set('prop:custom', JSON.stringify(customObject), slot);
+                return item_1.Item.set('prop:custom', JSON.stringify(customObject), _this._id);
             })
                 .then(function () {
-                resolve(this);
+                resolve(_this);
             });
         });
     };
     /**
-     * return: Promise<string>
+     * return: Promise<boolean>
      *
      * Gets if custom CSS is enabled and applied to the document on load
      */
-    HTMLItem.prototype.isCustomCSSEnabled = function () {
+    HtmlItem.prototype.isCustomCSSEnabled = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:custom', slot).then(function (custom) {
+            item_1.Item.get('prop:custom', _this._id).then(function (custom) {
                 var enabled = true;
                 try {
                     var customObject = JSON.parse(custom);
@@ -1487,21 +2810,20 @@ var HTMLItem = (function (_super) {
         });
     };
     /**
-     * param: value<string>
+     * param: (value: boolean)
      * ```
-     * return: Promise<HTMLItem>
+     * return: Promise<HtmlItem>
      * ```
      *
      * Enables or disables application of custom CSS to the document
      *
      * *Chainable.*
      */
-    HTMLItem.prototype.enableCustomCSS = function (value) {
+    HtmlItem.prototype.enableCustomCSS = function (value) {
         var _this = this;
         return new Promise(function (resolve, reject) {
-            var slot = item_1.Item.attach(_this._id);
             var customObject = {};
-            item_1.Item.get('prop:custom', slot).then(function (custom) {
+            item_1.Item.get('prop:custom', _this._id).then(function (custom) {
                 var customJS = '';
                 var customCSS = '';
                 var scriptString = ' ';
@@ -1542,10 +2864,10 @@ var HTMLItem = (function (_super) {
                 if (customJS !== '' && value === scriptEnabled) {
                     scriptString = scriptString + customJS;
                 }
-                return item_1.Item.set('prop:BrowserJs', scriptString, slot);
+                return item_1.Item.set('prop:BrowserJs', scriptString, _this._id);
             })
                 .then(function () {
-                return item_1.Item.set('prop:custom', JSON.stringify(customObject), slot);
+                return item_1.Item.set('prop:custom', JSON.stringify(customObject), _this._id);
             })
                 .then(function () {
                 if (!value) {
@@ -1556,10 +2878,10 @@ var HTMLItem = (function (_super) {
                     else {
                         internal_1.exec('CallInner', 'eval', cssScript);
                     }
-                    resolve(this);
+                    resolve(_this);
                 }
                 else {
-                    resolve(this);
+                    resolve(_this);
                 }
             });
         });
@@ -1569,11 +2891,10 @@ var HTMLItem = (function (_super) {
      *
      * Check if browser is rendered transparent
      */
-    HTMLItem.prototype.isBrowserTransparent = function () {
+    HtmlItem.prototype.isBrowserTransparent = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:BrowserTransparent').then(function (isTransparent) {
+            item_1.Item.get('prop:BrowserTransparent', _this._id).then(function (isTransparent) {
                 resolve(isTransparent === '1');
             });
         });
@@ -1581,18 +2902,17 @@ var HTMLItem = (function (_super) {
     /**
      * param: Promise<boolean>
      * ```
-     * return: Promise<HTMLItem>
+     * return: Promise<HtmlItem>
      * ```
      *
      * Enable or disabled transparency of CEF browser
      *
      * *Chainable.*
      */
-    HTMLItem.prototype.enableBrowserTransparency = function (value) {
+    HtmlItem.prototype.enableBrowserTransparency = function (value) {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.set('prop:BrowserTransparent', (value ? '1' : '0'), slot).then(function () {
+            item_1.Item.set('prop:BrowserTransparent', (value ? '1' : '0'), _this._id).then(function () {
                 resolve(_this);
             });
         });
@@ -1600,20 +2920,20 @@ var HTMLItem = (function (_super) {
     /**
      * return: Promise<Rectangle>
      *
-     * Gets the custom browser window size for the source, if set,
-     * regardless of its layout on the mixer
+     * Gets the custom browser window size (in pixels) for the item, if set,
+     * regardless of its layout on the mixer. Returns a (0, 0) Rectangle if no
+     * custom size has been set.
      *
      * See also: {@link #util/Rectangle Util/Rectangle}
      */
-    HTMLItem.prototype.getBrowserCustomSize = function () {
+    HtmlItem.prototype.getBrowserCustomSize = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
             var customSize;
-            item_1.Item.get('prop:BrowserSize', slot).then(function (val) {
+            item_1.Item.get('prop:BrowserSize', _this._id).then(function (val) {
                 if (val !== '') {
                     var _a = decodeURIComponent(val).split(','), width = _a[0], height = _a[1];
-                    customSize = rectangle_1.Rectangle.fromDimensions(Number(width), Number(height));
+                    customSize = rectangle_1.Rectangle.fromDimensions(Number(width) / window.devicePixelRatio, Number(height) / window.devicePixelRatio);
                 }
                 else {
                     customSize = rectangle_1.Rectangle.fromDimensions(0, 0);
@@ -1625,162 +2945,175 @@ var HTMLItem = (function (_super) {
     /**
      * param: Promise<Rectangle>
      * ```
-     * return: Promise<HTMLItem>
+     * return: Promise<HtmlItem>
      * ```
      *
-     * Sets the custom browser window size for the source
+     * Sets the custom browser window size for the item
      * regardless of its layout on the mixer
      *
      * *Chainable.*
      *
      * See also: {@link #util/Rectangle Util/Rectangle}
      */
-    HTMLItem.prototype.setBrowserCustomSize = function (value) {
+    HtmlItem.prototype.setBrowserCustomSize = function (value) {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.set('prop:BrowserSize', value.toDimensionString(), slot).then(function () {
+            // Set the correct width and height based on the DPI settings
+            value.setWidth(value.getWidth() * window.devicePixelRatio);
+            value.setHeight(value.getHeight() * window.devicePixelRatio);
+            item_1.Item.set('prop:BrowserSize', value.toDimensionString(), _this._id)
+                .then(function () {
                 resolve(_this);
             });
         });
     };
-    return HTMLItem;
+    /**
+     * return: Promise<boolean>
+     *
+     * Check if right click events are sent to the item or not.
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * item.getAllowRightClick().then(function(isRightClickAllowed) {
+     *   // The rest of your code here
+     * });
+     * ```
+     */
+    HtmlItem.prototype.getAllowRightClick = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:BrowserRightClick', _this._id).then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    /**
+     * param: (value:boolean)
+     * ```
+     * return: Promise<Item>
+     * ```
+     *
+     * Allow or disallow right click events to be sent to the item. Note that
+     * you can only catch right click events using `mouseup/mousedown`
+     *
+     * *Chainable*
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * item.setAllowRightClick(true).then(function(item) {
+     *   // Promise resolves with the same Item instance
+     * });
+     * ```
+     */
+    HtmlItem.prototype.setAllowRightClick = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:BrowserRightClick', (value ? '1' : '0'), _this._id)
+                .then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    /**
+     * param: (func: string, arg: string)
+     * ```
+     * return: Promise<HtmlItem>
+     * ```
+     *
+     * Allow this source to communicate with another source.
+     */
+    HtmlItem.prototype.call = function (func, arg) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var slot = item_1.Item.attach(_this._id);
+            internal_1.exec('CallInner' +
+                (String(slot) === '0' ? '' : slot + 1), func, arg);
+            resolve(_this);
+        });
+    };
+    return HtmlItem;
 })(item_2.Item);
-exports.HTMLItem = HTMLItem;
-mixin_1.applyMixins(HTMLItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition, iconfig_1.ItemConfigurable]);
-},{"../../internal/internal":20,"../../internal/item":21,"../../internal/util/mixin":23,"../../util/rectangle":34,"../environment":3,"./ichroma":9,"./icolor":10,"./iconfig":11,"./ilayout":12,"./item":13,"./itransition":14}],8:[function(require,module,exports){
+exports.HtmlItem = HtmlItem;
+mixin_1.applyMixins(HtmlItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition,
+    iconfig_1.ItemConfigurable, iaudio_1.ItemAudio, ieffects_1.ItemEffect]);
+},{"../../internal/internal":40,"../../internal/item":41,"../../internal/util/mixin":43,"../../util/rectangle":59,"../environment":4,"./iaudio":12,"./ichroma":13,"./icolor":14,"./iconfig":15,"./ieffects":16,"./ilayout":17,"./item":20,"./itransition":21}],12:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var item_1 = require('../../internal/item');
-var environment_1 = require('../environment');
 var ItemAudio = (function () {
     function ItemAudio() {
     }
     ItemAudio.prototype.getVolume = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:volume', slot).then(function (val) {
+            item_1.Item.get('prop:volume', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
     };
     ItemAudio.prototype.setVolume = function (value) {
         var _this = this;
-        return new Promise(function (resolve, reject) {
-            if (environment_1.Environment.isSourcePlugin()) {
-                reject(Error('Source plugins cannot update audio source properties.'));
-            }
-            else {
-                var slot = item_1.Item.attach(_this._id);
-                value = value < 0 ? 0 : value > 100 ? 100 : value;
-                item_1.Item.set('prop:volume', String(value), slot).then(function (res) {
-                    if (!res) {
-                        reject(Error('Item set property failed'));
-                    }
-                    else {
-                        resolve(_this);
-                    }
-                });
-            }
+        return new Promise(function (resolve) {
+            value = value < 0 ? 0 : value > 100 ? 100 : value;
+            item_1.Item.set('prop:volume', String(value), _this._id).then(function () {
+                resolve(_this);
+            });
         });
     };
     ItemAudio.prototype.isMute = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:mute', slot).then(function (val) {
+            item_1.Item.get('prop:mute', _this._id).then(function (val) {
                 resolve(val === '1');
             });
         });
     };
     ItemAudio.prototype.setMute = function (value) {
         var _this = this;
-        return new Promise(function (resolve, reject) {
-            if (environment_1.Environment.isSourcePlugin()) {
-                reject(Error('Source plugins cannot update audio sources properties'));
-            }
-            else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:mute', (value ? '1' : '0'), slot).then(function (res) {
-                    if (!res) {
-                        reject(Error('Item set property failed'));
-                    }
-                    else {
-                        resolve(_this);
-                    }
-                });
-            }
-        });
-    };
-    ItemAudio.prototype.getAudioOffset = function () {
-        var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:AudioDelay', slot).then(function (val) {
-                resolve(Number(val));
+            item_1.Item.set('prop:mute', (value ? '1' : '0'), _this._id).then(function () {
+                resolve(_this);
             });
         });
     };
-    ItemAudio.prototype.setAudioOffset = function (value) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            if (environment_1.Environment.isSourcePlugin()) {
-                reject(Error('Source plugins cannot update audio sources properties'));
-            }
-            else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:AudioDelay', String(value), slot).then(function (res) {
-                    if (!res) {
-                        reject(Error('Item set property failed'));
-                    }
-                    else {
-                        resolve(_this);
-                    }
-                });
-            }
-        });
-    };
-    ItemAudio.prototype.isStreamOnlyEnabled = function () {
+    ItemAudio.prototype.isStreamOnlyAudio = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:sounddev', slot).then(function (val) {
+            item_1.Item.get('prop:sounddev', _this._id).then(function (val) {
                 resolve(val === '1');
             });
         });
     };
-    ItemAudio.prototype.setStreamOnlyEnabled = function (value) {
+    ItemAudio.prototype.setStreamOnlyAudio = function (value) {
         var _this = this;
-        return new Promise(function (resolve, reject) {
-            if (environment_1.Environment.isSourcePlugin()) {
-                reject(Error('Source plugins cannot update audio sources properties'));
-            }
-            else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:sounddev', (value ? '1' : '0'), slot).then(function (res) {
-                    if (!res) {
-                        reject(Error('Item set property failed'));
-                    }
-                    else {
-                        resolve(_this);
-                    }
-                });
-            }
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:sounddev', (value ? '1' : '0'), _this._id).then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    ItemAudio.prototype.isAudioAvailable = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:audioavail', _this._id).then(function (val) {
+                resolve(val === '1');
+            });
         });
     };
     return ItemAudio;
 })();
 exports.ItemAudio = ItemAudio;
-},{"../../internal/item":21,"../environment":3}],9:[function(require,module,exports){
+},{"../../internal/item":41}],13:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var item_1 = require('../../internal/item');
 var color_1 = require('../../util/color');
 /**
  *  Used by items that implement the Chroma interface.
  *  Check `getKeyingType()`/`setKeyingType()` method of
- *  {@link #core/CameraItem Core/CameraItem},
- *  {@link #core/GameItem Core/GameItem}, and
- *  {@link #core/HTMLItem Core/HTMLItem}.
+ *  {@link #core/CameraItem#getKeyingType Core/CameraItem},
+ *  {@link #core/GameItem#getKeyingType Core/GameItem}, and
+ *  {@link #core/HtmlItem#getKeyingType Core/HtmlItem}.
  */
 (function (KeyingType) {
     KeyingType[KeyingType["LEGACY"] = 0] = "LEGACY";
@@ -1793,9 +3126,9 @@ var KeyingType = exports.KeyingType;
  *  Chroma Key.
  *
  *  Check `getChromaRGBKeyPrimaryColor()`/`setChromaRGBKeyPrimaryColor()` method
- *  of {@link #core/CameraItem Core/CameraItem},
- *  {@link #core/GameItem Core/GameItem}, and
- *  {@link #core/HTMLItem Core/HTMLItem}.
+ *  of {@link #core/CameraItem#getChromaRGBKeyPrimaryColor Core/CameraItem},
+ *  {@link #core/GameItem#getChromaRGBKeyPrimaryColor Core/GameItem}, and
+ *  {@link #core/HtmlItem#getChromaRGBKeyPrimaryColor Core/HtmlItem}.
  */
 (function (ChromaPrimaryColors) {
     ChromaPrimaryColors[ChromaPrimaryColors["RED"] = 0] = "RED";
@@ -1807,9 +3140,9 @@ var ChromaPrimaryColors = exports.ChromaPrimaryColors;
  *  Used by items that implement the Chroma interface.
  *
  *  Check `getChromaAntiAliasLevel()`/`setChromaAntiAliasLevel()` method
- *  of {@link #core/CameraItem Core/CameraItem},
- *  {@link #core/GameItem Core/GameItem}, and
- *  {@link #core/HTMLItem Core/HTMLItem}.
+ *  of {@link #core/CameraItem#getChromaAntiAliasLevel Core/CameraItem},
+ *  {@link #core/GameItem#getChromaAntiAliasLevel Core/GameItem}, and
+ *  {@link #core/HtmlItem#getChromaAntiAliasLevel Core/HtmlItem}.
  */
 (function (ChromaAntiAliasLevel) {
     ChromaAntiAliasLevel[ChromaAntiAliasLevel["NONE"] = 0] = "NONE";
@@ -1823,8 +3156,7 @@ var ItemChroma = (function () {
     ItemChroma.prototype.isChromaEnabled = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:key_chromakey', slot).then(function (val) {
+            item_1.Item.get('prop:key_chromakey', _this._id).then(function (val) {
                 resolve(val === '1');
             });
         });
@@ -1836,8 +3168,7 @@ var ItemChroma = (function () {
                 reject(TypeError('Parameter should be boolean.'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:key_chromakey', (value ? '1' : '0'), slot).then(function () {
+                item_1.Item.set('prop:key_chromakey', (value ? '1' : '0'), _this._id).then(function () {
                     resolve(_this);
                 });
             }
@@ -1846,8 +3177,7 @@ var ItemChroma = (function () {
     ItemChroma.prototype.getKeyingType = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:key_chromakeytype', slot).then(function (val) {
+            item_1.Item.get('prop:key_chromakeytype', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -1862,8 +3192,7 @@ var ItemChroma = (function () {
                 reject(RangeError('Use a KeyingType value as the parameter.'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:key_chromakeytype', String(value), slot).then(function () {
+                item_1.Item.set('prop:key_chromakeytype', String(value), _this._id).then(function () {
                     resolve(_this);
                 });
             }
@@ -1872,8 +3201,7 @@ var ItemChroma = (function () {
     ItemChroma.prototype.getChromaAntiAliasLevel = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:key_antialiasing', slot).then(function (val) {
+            item_1.Item.get('prop:key_antialiasing', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -1888,8 +3216,7 @@ var ItemChroma = (function () {
                 reject(RangeError('Use a ChromaAntiAliasLevel value as the parameter.'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:key_antialiasing', String(value), slot).then(function () {
+                item_1.Item.set('prop:key_antialiasing', String(value), _this._id).then(function () {
                     resolve(_this);
                 });
             }
@@ -1899,8 +3226,7 @@ var ItemChroma = (function () {
     ItemChroma.prototype.getChromaLegacyBrightness = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:key_chromabr', slot).then(function (val) {
+            item_1.Item.get('prop:key_chromabr', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -1915,8 +3241,7 @@ var ItemChroma = (function () {
                 reject(RangeError('Valid value is an integer from 0-255.'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:key_chromabr', String(value), slot).then(function () {
+                item_1.Item.set('prop:key_chromabr', String(value), _this._id).then(function () {
                     resolve(_this);
                 });
             }
@@ -1925,8 +3250,7 @@ var ItemChroma = (function () {
     ItemChroma.prototype.getChromaLegacySaturation = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:key_chromasat', slot).then(function (val) {
+            item_1.Item.get('prop:key_chromasat', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -1941,8 +3265,7 @@ var ItemChroma = (function () {
                 reject(RangeError('Valid value is an integer from 0-255.'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:key_chromasat', String(value), slot).then(function () {
+                item_1.Item.set('prop:key_chromasat', String(value), _this._id).then(function () {
                     resolve(_this);
                 });
             }
@@ -1951,8 +3274,7 @@ var ItemChroma = (function () {
     ItemChroma.prototype.getChromaLegacyHue = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:key_chromahue', slot).then(function (val) {
+            item_1.Item.get('prop:key_chromahue', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -1967,8 +3289,7 @@ var ItemChroma = (function () {
                 reject(RangeError('Valid value is an integer from 0-180.'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:key_chromahue', String(value), slot).then(function () {
+                item_1.Item.set('prop:key_chromahue', String(value), _this._id).then(function () {
                     resolve(_this);
                 });
             }
@@ -1977,8 +3298,7 @@ var ItemChroma = (function () {
     ItemChroma.prototype.getChromaLegacyThreshold = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:key_chromarang', slot).then(function (val) {
+            item_1.Item.get('prop:key_chromarang', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -1993,8 +3313,7 @@ var ItemChroma = (function () {
                 reject(RangeError('Valid value is an integer from 0-255.'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:key_chromarang', String(value), slot).then(function () {
+                item_1.Item.set('prop:key_chromarang', String(value), _this._id).then(function () {
                     resolve(_this);
                 });
             }
@@ -2003,8 +3322,7 @@ var ItemChroma = (function () {
     ItemChroma.prototype.getChromaLegacyAlphaSmoothing = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:key_chromaranga', slot).then(function (val) {
+            item_1.Item.get('prop:key_chromaranga', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -2019,8 +3337,7 @@ var ItemChroma = (function () {
                 reject(RangeError('Valid value is an integer from 0-255.'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:key_chromaranga', String(value), slot).then(function () {
+                item_1.Item.set('prop:key_chromaranga', String(value), _this._id).then(function () {
                     resolve(_this);
                 });
             }
@@ -2030,8 +3347,7 @@ var ItemChroma = (function () {
     ItemChroma.prototype.getChromaRGBKeyPrimaryColor = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:key_chromargbkeyprimary', slot).then(function (val) {
+            item_1.Item.get('prop:key_chromargbkeyprimary', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -2046,8 +3362,7 @@ var ItemChroma = (function () {
                 reject(RangeError('Use a ChromaPrimaryColors value as the parameter.'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:key_chromargbkeyprimary', String(value), slot)
+                item_1.Item.set('prop:key_chromargbkeyprimary', String(value), _this._id)
                     .then(function () {
                     resolve(_this);
                 });
@@ -2057,8 +3372,7 @@ var ItemChroma = (function () {
     ItemChroma.prototype.getChromaRGBKeyThreshold = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:key_chromargbkeythresh', slot).then(function (val) {
+            item_1.Item.get('prop:key_chromargbkeythresh', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -2073,8 +3387,7 @@ var ItemChroma = (function () {
                 reject(RangeError('Valid value is an integer from 0-255.'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:key_chromargbkeythresh', String(value), slot)
+                item_1.Item.set('prop:key_chromargbkeythresh', String(value), _this._id)
                     .then(function () {
                     resolve(_this);
                 });
@@ -2084,8 +3397,7 @@ var ItemChroma = (function () {
     ItemChroma.prototype.getChromaRGBKeyExposure = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:key_chromargbkeybalance', slot).then(function (val) {
+            item_1.Item.get('prop:key_chromargbkeybalance', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -2100,8 +3412,7 @@ var ItemChroma = (function () {
                 reject(RangeError('Valid value is an integer from 0-255.'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:key_chromargbkeybalance', String(value), slot)
+                item_1.Item.set('prop:key_chromargbkeybalance', String(value), _this._id)
                     .then(function () {
                     resolve(_this);
                 });
@@ -2112,8 +3423,7 @@ var ItemChroma = (function () {
     ItemChroma.prototype.getChromaColorKeyThreshold = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:key_colorrang', slot).then(function (val) {
+            item_1.Item.get('prop:key_colorrang', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -2128,8 +3438,7 @@ var ItemChroma = (function () {
                 reject(RangeError('Valid value is an integer from 0-255.'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:key_colorrang', String(value), slot).then(function () {
+                item_1.Item.set('prop:key_colorrang', String(value), _this._id).then(function () {
                     resolve(_this);
                 });
             }
@@ -2138,8 +3447,7 @@ var ItemChroma = (function () {
     ItemChroma.prototype.getChromaColorKeyExposure = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:key_colorranga', slot).then(function (val) {
+            item_1.Item.get('prop:key_colorranga', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -2154,8 +3462,7 @@ var ItemChroma = (function () {
                 reject(RangeError('Valid value is an integer from 0-255.'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:key_colorranga', String(value), slot).then(function () {
+                item_1.Item.set('prop:key_colorranga', String(value), _this._id).then(function () {
                     resolve(_this);
                 });
             }
@@ -2164,8 +3471,7 @@ var ItemChroma = (function () {
     ItemChroma.prototype.getChromaColorKeyColor = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:key_colorrgb', slot).then(function (val) {
+            item_1.Item.get('prop:key_colorrgb', _this._id).then(function (val) {
                 var color = color_1.Color.fromBGRString(val);
                 resolve(color);
             });
@@ -2174,8 +3480,7 @@ var ItemChroma = (function () {
     ItemChroma.prototype.setChromaColorKeyColor = function (value) {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.set('prop:key_colorrgb', String(value.getIbgr()), slot).then(function () {
+            item_1.Item.set('prop:key_colorrgb', String(value.getIbgr()), _this._id).then(function () {
                 resolve(_this);
             });
         });
@@ -2183,7 +3488,7 @@ var ItemChroma = (function () {
     return ItemChroma;
 })();
 exports.ItemChroma = ItemChroma;
-},{"../../internal/item":21,"../../util/color":30}],10:[function(require,module,exports){
+},{"../../internal/item":41,"../../util/color":55}],14:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var item_1 = require('../../internal/item');
 var color_1 = require('../../util/color');
@@ -2193,8 +3498,7 @@ var ItemColor = (function () {
     ItemColor.prototype.getTransparency = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:alpha', slot).then(function (val) {
+            item_1.Item.get('prop:alpha', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -2206,8 +3510,7 @@ var ItemColor = (function () {
                 reject(RangeError('Transparency may only be in the range 0 to 255.'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:alpha', String(value), slot).then(function () {
+                item_1.Item.set('prop:alpha', String(value), _this._id).then(function () {
                     resolve(_this);
                 });
             }
@@ -2216,8 +3519,7 @@ var ItemColor = (function () {
     ItemColor.prototype.getBrightness = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:cc_brightness', slot).then(function (val) {
+            item_1.Item.get('prop:cc_brightness', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -2229,8 +3531,7 @@ var ItemColor = (function () {
                 reject(RangeError('Brightness may only be in the range -100 to 100.'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:cc_brightness', String(value), slot).then(function () {
+                item_1.Item.set('prop:cc_brightness', String(value), _this._id).then(function () {
                     resolve(_this);
                 });
             }
@@ -2239,8 +3540,7 @@ var ItemColor = (function () {
     ItemColor.prototype.getContrast = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:cc_contrast', slot).then(function (val) {
+            item_1.Item.get('prop:cc_contrast', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -2252,8 +3552,7 @@ var ItemColor = (function () {
                 reject(RangeError('Contrast may only be in the range -100 to 100.'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:cc_contrast', String(value), slot).then(function () {
+                item_1.Item.set('prop:cc_contrast', String(value), _this._id).then(function () {
                     resolve(_this);
                 });
             }
@@ -2262,8 +3561,7 @@ var ItemColor = (function () {
     ItemColor.prototype.getHue = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:cc_hue', slot).then(function (val) {
+            item_1.Item.get('prop:cc_hue', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -2275,8 +3573,7 @@ var ItemColor = (function () {
                 reject(RangeError('Contrast may only be in the range -180 to 180.'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:cc_hue', String(value), slot).then(function () {
+                item_1.Item.set('prop:cc_hue', String(value), _this._id).then(function () {
                     resolve(_this);
                 });
             }
@@ -2285,8 +3582,7 @@ var ItemColor = (function () {
     ItemColor.prototype.getSaturation = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:cc_saturation', slot).then(function (val) {
+            item_1.Item.get('prop:cc_saturation', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -2298,8 +3594,7 @@ var ItemColor = (function () {
                 reject(RangeError('Saturation may only be in the range -100 to 100'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:cc_saturation', String(value), slot).then(function () {
+                item_1.Item.set('prop:cc_saturation', String(value), _this._id).then(function () {
                     resolve(_this);
                 });
             }
@@ -2308,8 +3603,7 @@ var ItemColor = (function () {
     ItemColor.prototype.getBorderColor = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:border', slot).then(function (val) {
+            item_1.Item.get('prop:border', _this._id).then(function (val) {
                 var bgr = Number(val) - 0x80000000;
                 var color = color_1.Color.fromBGRInt(bgr);
                 resolve(color);
@@ -2319,16 +3613,36 @@ var ItemColor = (function () {
     ItemColor.prototype.setBorderColor = function (value) {
         var _this = this;
         return new Promise(function (resolve, reject) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.set('prop:border', String(value.getIbgr() - 0x80000000), slot).then(function () {
+            item_1.Item.set('prop:border', String(value.getIbgr() - 0x80000000), _this._id).then(function () {
                 resolve(_this);
             });
+        });
+    };
+    ItemColor.prototype.isFullDynamicColorRange = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:cc_dynamicrange', _this._id).then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    ItemColor.prototype.setFullDynamicColorRange = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof value !== 'boolean') {
+                reject(TypeError('Parameter should be boolean.'));
+            }
+            else {
+                item_1.Item.set('prop:cc_dynamicrange', (value ? '1' : '0'), _this._id).then(function () {
+                    resolve(_this);
+                });
+            }
         });
     };
     return ItemColor;
 })();
 exports.ItemColor = ItemColor;
-},{"../../internal/item":21,"../../util/color":30}],11:[function(require,module,exports){
+},{"../../internal/item":41,"../../util/color":55}],15:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var item_1 = require('../../internal/item');
 var global_1 = require('../../internal/global');
@@ -2340,8 +3654,7 @@ var ItemConfigurable = (function () {
     ItemConfigurable.prototype.loadConfig = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:BrowserConfiguration', slot).then(function (config) {
+            item_1.Item.get('prop:BrowserConfiguration', _this._id).then(function (config) {
                 var configObj = config === 'null' ? {} : JSON.parse(config);
                 var persist = global_1.Global.getPersistentConfig();
                 for (var key in persist) {
@@ -2375,14 +3688,14 @@ var ItemConfigurable = (function () {
                     }
                 }
                 else {
-                    reject(Error('Sources may only request other ' +
-                        'sources to save a configuration. Consider ' +
+                    reject(Error('Items may only request other ' +
+                        'Items to save a configuration. Consider ' +
                         'calling requestSaveConfig() on this Item ' +
                         'instance instead.'));
                 }
             }
             else {
-                reject(Error('Extensions and source configuration windows are ' +
+                reject(Error('Extensions and source properties windows are ' +
                     'not allowed to directly save configuration objects. ' +
                     'Call requestSaveConfig() instead.'));
             }
@@ -2413,18 +3726,613 @@ var ItemConfigurable = (function () {
     return ItemConfigurable;
 })();
 exports.ItemConfigurable = ItemConfigurable;
-},{"../../internal/global":18,"../../internal/internal":20,"../../internal/item":21,"../environment":3}],12:[function(require,module,exports){
+},{"../../internal/global":38,"../../internal/internal":40,"../../internal/item":41,"../environment":4}],16:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var item_1 = require('../../internal/item');
+var color_1 = require('../../util/color');
+/**
+ *  Used by sources that implement the Effect interface.
+ *  Check `getMaskEffect()`/`setMaskEffect()` method of
+ *  {@link #core/CameraItem#getMaskEffect Core/CameraItem},
+ *  {@link #core/FlashItem#getMaskEffect Core/FlashItem},
+ *  {@link #core/GameItem#getMaskEffect Core/GameItem},
+ *  {@link #core/HtmlItem#getMaskEffect Core/HtmlItem},
+ *  {@link #core/ImageItem#getMaskEffect Core/ImageItem},
+ *  {@link #core/MediaItem#getMaskEffect Core/MediaItem}, and
+ *  {@link #core/ScreenItem#getMaskEffect Core/ScreenItem}.
+ */
+(function (MaskEffect) {
+    MaskEffect[MaskEffect["NONE"] = 0] = "NONE";
+    MaskEffect[MaskEffect["SHAPE"] = 1] = "SHAPE";
+    MaskEffect[MaskEffect["FILE_BIND_TO_SOURCE"] = 2] = "FILE_BIND_TO_SOURCE";
+    MaskEffect[MaskEffect["FILE_BIND_TO_STAGE"] = 3] = "FILE_BIND_TO_STAGE";
+})(exports.MaskEffect || (exports.MaskEffect = {}));
+var MaskEffect = exports.MaskEffect;
+var _DEFAULT_EFFECT_VALUES = {
+    'MASK_EFFECT': MaskEffect.NONE,
+    'BORDER_RADIUS': 0,
+    'BORDER_THICKNESS': 0,
+    'BORDER_OPACITY': 100,
+    'BORDER_COLOR': color_1.Color.fromRGBString('#FFFFFF'),
+    'SHADOW_COLOR': color_1.Color.fromRGBString('#FFFFFF'),
+    'SHADOW_THICKNESS': 0,
+    'SHADOW_BLUR': 0,
+    'SHADOW_OPACITY': 100,
+    'SHADOW_OFFSET_X': 0,
+    'SHADOW_OFFSET_Y': 0,
+    'FILE_MASK': '',
+    'FILE_MASK_GUIDE': false
+};
+var _DEFAULT_EDGE_EFFECT_CONFIG = '0,1.00,1.00,1.00,1|1,0,0,0,1|2,0,0,0,0|3,1.00,1.00,1.00,1';
+var ItemEffect = (function () {
+    function ItemEffect() {
+    }
+    ItemEffect.prototype._convertToHex = function (value) {
+        var hex = (parseInt(String(Number(value) * 255))).toString(16);
+        if (hex.length < 2) {
+            hex = '0' + hex;
+        }
+        return hex;
+    };
+    ItemEffect.prototype._getEdgeEffectValue = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            item_1.Item.get('prop:edgeeffectcfg', _this._id).then(function (val) {
+                if (val !== '' && val !== null) {
+                    var edgeConfig = val.split("|");
+                    var arrayIndex = value['arrayIndex'];
+                    var individualIndex = value['indIndex'];
+                    if (typeof edgeConfig[arrayIndex] !== 'undefined') {
+                        var cfgArray = edgeConfig[arrayIndex].split(',');
+                        if (Array.isArray(individualIndex)) {
+                            var newArray = [];
+                            for (var i = 0; i < individualIndex.length; ++i) {
+                                var config = individualIndex[i];
+                                newArray.push(cfgArray[config]);
+                            }
+                            resolve(newArray);
+                        }
+                        else {
+                            resolve(cfgArray[individualIndex]);
+                        }
+                    }
+                    else {
+                        reject(RangeError('Invalid parameter. Array index given not included.'));
+                    }
+                }
+                else {
+                    reject(ReferenceError('Edge effect configuration not set.'));
+                }
+            });
+        });
+    };
+    ItemEffect.prototype._setEdgeEffectValue = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            item_1.Item.get('prop:edgeeffectcfg', _this._id).then(function (val) {
+                var edgeConfig = [];
+                var edgeEffectString;
+                if (val !== '' && val !== null) {
+                    edgeEffectString = val;
+                }
+                else {
+                    edgeEffectString = _DEFAULT_EDGE_EFFECT_CONFIG;
+                }
+                var edgeArray = edgeEffectString.split("|");
+                var edgeArrayLength = edgeArray.length;
+                for (var i = 0; i < edgeArrayLength; ++i) {
+                    edgeConfig.push(edgeArray[i].split(','));
+                }
+                var arrayIndex = value['arrayIndex'];
+                var individualIndex = value['indIndex'];
+                var setValue = value['value'];
+                if (typeof edgeConfig[arrayIndex] !== 'undefined') {
+                    var oldArray = edgeConfig[arrayIndex];
+                    if (Array.isArray(individualIndex)) {
+                        for (var j = 0; j < individualIndex.length; ++j) {
+                            var tempIndex = individualIndex[j];
+                            oldArray[tempIndex] = setValue[j];
+                        }
+                    }
+                    else {
+                        oldArray[individualIndex] = setValue;
+                    }
+                    edgeConfig[arrayIndex] = oldArray;
+                    var edgeEffectStringValue = '';
+                    for (var k = 0; k < edgeConfig.length; ++k) {
+                        edgeEffectStringValue = edgeEffectStringValue + edgeConfig[k].toString();
+                        if (k !== edgeConfig.length - 1) {
+                            edgeEffectStringValue = edgeEffectStringValue + '|';
+                        }
+                    }
+                    item_1.Item.set('prop:edgeeffectcfg', edgeEffectStringValue, _this._id)
+                        .then(function () {
+                        resolve(_this);
+                    });
+                }
+                else {
+                    reject(RangeError('Invalid parameter. Array index given not included.'));
+                }
+            });
+        });
+    };
+    ItemEffect.prototype._getRGBArray = function (value) {
+        var hex = value.getRgb();
+        var r = parseInt(hex.substring(0, 2), 16) / 255;
+        var g = parseInt(hex.substring(2, 4), 16) / 255;
+        var b = parseInt(hex.substring(4), 16) / 255;
+        return [r, g, b];
+    };
+    ItemEffect.prototype.getMaskEffect = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:edgeeffectid', _this._id).then(function (val) {
+                if (val === 'border') {
+                    resolve(MaskEffect.SHAPE);
+                }
+                else {
+                    item_1.Item.get('prop:edgeeffectmaskmode', _this._id).then(function (val) {
+                        if (val === '1' || val === '3') {
+                            resolve(MaskEffect.FILE_BIND_TO_SOURCE);
+                        }
+                        else if (val === '2' || val === '4') {
+                            resolve(MaskEffect.FILE_BIND_TO_STAGE);
+                        }
+                        else {
+                            resolve(_DEFAULT_EFFECT_VALUES['MASK_EFFECT']);
+                        }
+                    });
+                }
+            });
+        });
+    };
+    ItemEffect.prototype.setMaskEffect = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof value !== 'number') {
+                reject(TypeError('Use a MaskEffect value as the parameter.'));
+            }
+            else if (value < 0 || value > 3) {
+                reject(RangeError('Use a MaskEffect value as the parameter.'));
+            }
+            else {
+                if (value === 1) {
+                    item_1.Item.set('prop:edgeeffectmaskmode', '0', _this._id).then(function () {
+                        return item_1.Item.set('prop:edgeeffectid', 'border', _this._id);
+                    }).then(function () {
+                        resolve(_this);
+                    });
+                }
+                else {
+                    item_1.Item.set('prop:edgeeffectid', '', _this._id).then(function () {
+                        if (value === 2 || value === 3) {
+                            value = value - 1;
+                        }
+                        else {
+                            value = 0;
+                        }
+                        return item_1.Item.set('prop:edgeeffectmaskmode', String(value), _this._id);
+                    }).then(function () {
+                        resolve(_this);
+                    });
+                }
+            }
+        });
+    };
+    ItemEffect.prototype.getBorderEffectRadius = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var parameterObject = {};
+            parameterObject['arrayIndex'] = 1;
+            parameterObject['indIndex'] = 1;
+            _this._getEdgeEffectValue(parameterObject).then(function (val) {
+                resolve(Number(val) * 100);
+            }).catch(function (err) {
+                resolve(_DEFAULT_EFFECT_VALUES['BORDER_RADIUS']);
+            });
+        });
+    };
+    ItemEffect.prototype.setBorderEffectRadius = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof value !== 'number') {
+                reject(TypeError('Use a number as the parameter.'));
+            }
+            else if (value < 0 || value > 100) {
+                reject(RangeError('Valid value is a number from 0 - 100.'));
+            }
+            else {
+                var parameterObject = {};
+                parameterObject['arrayIndex'] = 1;
+                parameterObject['indIndex'] = 1;
+                parameterObject['value'] = value / 100;
+                _this._setEdgeEffectValue(parameterObject).then(function () {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    ItemEffect.prototype.getBorderEffectThickness = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var parameterObject = {};
+            parameterObject['arrayIndex'] = 1;
+            parameterObject['indIndex'] = 2;
+            _this._getEdgeEffectValue(parameterObject).then(function (val) {
+                resolve(Number(val) * 100);
+            }).catch(function (err) {
+                resolve(_DEFAULT_EFFECT_VALUES['BORDER_THICKNESS']);
+            });
+        });
+    };
+    ItemEffect.prototype.setBorderEffectThickness = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof value !== 'number') {
+                reject(TypeError('Use a number as the parameter.'));
+            }
+            else if (value < 0 || value > 100) {
+                reject(RangeError('Valid value is a number from 0 - 100.'));
+            }
+            else {
+                var parameterObject = {};
+                parameterObject['arrayIndex'] = 1;
+                parameterObject['indIndex'] = 2;
+                parameterObject['value'] = value / 100;
+                _this._setEdgeEffectValue(parameterObject).then(function () {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    ItemEffect.prototype.getBorderEffectOpacity = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var parameterObject = {};
+            parameterObject['arrayIndex'] = 0;
+            parameterObject['indIndex'] = 4;
+            _this._getEdgeEffectValue(parameterObject).then(function (val) {
+                resolve(Number(val) * 100);
+            }).catch(function (err) {
+                resolve(_DEFAULT_EFFECT_VALUES['BORDER_OPACITY']);
+            });
+        });
+    };
+    ItemEffect.prototype.setBorderEffectOpacity = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof value !== 'number') {
+                reject(TypeError('Use a number as the parameter.'));
+            }
+            else if (value < 0 || value > 100) {
+                reject(RangeError('Valid value is a number from 0 - 100.'));
+            }
+            else {
+                var parameterObject = {};
+                parameterObject['arrayIndex'] = 0;
+                parameterObject['indIndex'] = 4;
+                parameterObject['value'] = value / 100;
+                _this._setEdgeEffectValue(parameterObject).then(function () {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    ItemEffect.prototype.getBorderEffectColor = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var parameterObject = {};
+            parameterObject['arrayIndex'] = 0;
+            parameterObject['indIndex'] = [1, 2, 3];
+            _this._getEdgeEffectValue(parameterObject).then(function (val) {
+                resolve(color_1.Color.fromRGBString('#' + _this._convertToHex(val[0]) + _this._convertToHex(val[1]) + _this._convertToHex(val[2])));
+            }).catch(function (err) {
+                resolve(_DEFAULT_EFFECT_VALUES['BORDER_COLOR']);
+            });
+        });
+    };
+    ItemEffect.prototype.setBorderEffectColor = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            var parameterObject = {};
+            parameterObject['arrayIndex'] = 0;
+            parameterObject['indIndex'] = [1, 2, 3];
+            parameterObject['value'] = _this._getRGBArray(value);
+            _this._setEdgeEffectValue(parameterObject).then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    ItemEffect.prototype.getShadowEffectColor = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var parameterObject = {};
+            parameterObject['arrayIndex'] = 3;
+            parameterObject['indIndex'] = [1, 2, 3];
+            _this._getEdgeEffectValue(parameterObject).then(function (val) {
+                resolve(color_1.Color.fromRGBString('#' + _this._convertToHex(val[0]) + _this._convertToHex(val[1]) + _this._convertToHex(val[2])));
+            }).catch(function (err) {
+                resolve(_DEFAULT_EFFECT_VALUES['SHADOW_COLOR']);
+            });
+        });
+    };
+    ItemEffect.prototype.setShadowEffectColor = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            var parameterObject = {};
+            parameterObject['arrayIndex'] = 3;
+            parameterObject['indIndex'] = [1, 2, 3];
+            parameterObject['value'] = _this._getRGBArray(value);
+            _this._setEdgeEffectValue(parameterObject).then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    ItemEffect.prototype.getShadowEffectThickness = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var parameterObject = {};
+            parameterObject['arrayIndex'] = 1;
+            parameterObject['indIndex'] = 3;
+            _this._getEdgeEffectValue(parameterObject).then(function (val) {
+                resolve(Number(val) * 100);
+            }).catch(function (err) {
+                resolve(_DEFAULT_EFFECT_VALUES['SHADOW_THICKNESS']);
+            });
+        });
+    };
+    ItemEffect.prototype.setShadowEffectThickness = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof value !== 'number') {
+                reject(TypeError('Use a number as the parameter.'));
+            }
+            else if (value < 0 || value > 100) {
+                reject(RangeError('Valid value is a number from 0 - 100.'));
+            }
+            else {
+                var parameterObject = {};
+                parameterObject['arrayIndex'] = 1;
+                parameterObject['indIndex'] = 3;
+                parameterObject['value'] = value / 100;
+                _this._setEdgeEffectValue(parameterObject).then(function () {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    ItemEffect.prototype.getShadowEffectBlur = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var parameterObject = {};
+            parameterObject['arrayIndex'] = 2;
+            parameterObject['indIndex'] = 3;
+            _this._getEdgeEffectValue(parameterObject).then(function (val) {
+                resolve(Number(val) * 100);
+            }).catch(function (err) {
+                resolve(_DEFAULT_EFFECT_VALUES['SHADOW_BLUR']);
+            });
+        });
+    };
+    ItemEffect.prototype.setShadowEffectBlur = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof value !== 'number') {
+                reject(TypeError('Use a number as the parameter.'));
+            }
+            else if (value < 0 || value > 100) {
+                reject(RangeError('Valid value is a number from 0 - 100.'));
+            }
+            else {
+                var parameterObject = {};
+                parameterObject['arrayIndex'] = 2;
+                parameterObject['indIndex'] = 3;
+                parameterObject['value'] = value / 100;
+                _this._setEdgeEffectValue(parameterObject).then(function () {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    ItemEffect.prototype.getShadowEffectOpacity = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var parameterObject = {};
+            parameterObject['arrayIndex'] = 3;
+            parameterObject['indIndex'] = 4;
+            _this._getEdgeEffectValue(parameterObject).then(function (val) {
+                resolve(Number(val) * 100);
+            }).catch(function (err) {
+                resolve(_DEFAULT_EFFECT_VALUES['SHADOW_OPACITY']);
+            });
+        });
+    };
+    ItemEffect.prototype.setShadowEffectOpacity = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof value !== 'number') {
+                reject(TypeError('Use a number as the parameter.'));
+            }
+            else if (value < 0 || value > 100) {
+                reject(RangeError('Valid value is a number from 0 - 100.'));
+            }
+            else {
+                var parameterObject = {};
+                parameterObject['arrayIndex'] = 3;
+                parameterObject['indIndex'] = 4;
+                parameterObject['value'] = value / 100;
+                _this._setEdgeEffectValue(parameterObject).then(function () {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    ItemEffect.prototype.getShadowEffectOffsetX = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var parameterObject = {};
+            parameterObject['arrayIndex'] = 2;
+            parameterObject['indIndex'] = 1;
+            _this._getEdgeEffectValue(parameterObject).then(function (val) {
+                resolve(Number(val) * 100);
+            }).catch(function (err) {
+                resolve(_DEFAULT_EFFECT_VALUES['SHADOW_OFFSET_X']);
+            });
+        });
+    };
+    ItemEffect.prototype.setShadowEffectOffsetX = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof value !== 'number') {
+                reject(TypeError('Use a number as the parameter.'));
+            }
+            else if (value < -100 || value > 100) {
+                reject(RangeError('Valid value is a number from -100 to 100.'));
+            }
+            else {
+                var parameterObject = {};
+                parameterObject['arrayIndex'] = 2;
+                parameterObject['indIndex'] = 1;
+                parameterObject['value'] = value / 100;
+                _this._setEdgeEffectValue(parameterObject).then(function () {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    ItemEffect.prototype.getShadowEffectOffsetY = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var parameterObject = {};
+            parameterObject['arrayIndex'] = 2;
+            parameterObject['indIndex'] = 2;
+            _this._getEdgeEffectValue(parameterObject).then(function (val) {
+                resolve(Number(val) * 100);
+            }).catch(function (err) {
+                resolve(_DEFAULT_EFFECT_VALUES['SHADOW_OFFSET_Y']);
+            });
+        });
+    };
+    ItemEffect.prototype.setShadowEffectOffsetY = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof value !== 'number') {
+                reject(TypeError('Use a number as the parameter.'));
+            }
+            else if (value < -100 || value > 100) {
+                reject(RangeError('Valid value is a number from -100 to 100.'));
+            }
+            else {
+                var parameterObject = {};
+                parameterObject['arrayIndex'] = 2;
+                parameterObject['indIndex'] = 2;
+                parameterObject['value'] = value / 100;
+                _this._setEdgeEffectValue(parameterObject).then(function () {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    ItemEffect.prototype.getFileMask = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:edgeeffectmask', _this._id).then(function (val) {
+                resolve(val);
+            });
+        });
+    };
+    ItemEffect.prototype.setFileMask = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:edgeeffectmask', value, _this._id).then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    ItemEffect.prototype.isFileMaskingGuideVisible = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            item_1.Item.get('prop:edgeeffectmaskmode', _this._id).then(function (val) {
+                if (val === '4' || val === '3') {
+                    resolve(true);
+                }
+                else if (val === '2' || val === '1') {
+                    resolve(false);
+                }
+                else {
+                    reject(new Error('This method is not available if filemasking is not enabled.'));
+                }
+            });
+        });
+    };
+    ItemEffect.prototype.showFileMaskingGuide = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            item_1.Item.get('prop:edgeeffectmaskmode', _this._id).then(function (val) {
+                if (val === '1' || val === '3') {
+                    item_1.Item.set('prop:edgeeffectmaskmode', value ? '3' : '1', _this._id);
+                }
+                else if (val === '2' || val === '4') {
+                    item_1.Item.set('prop:edgeeffectmaskmode', value ? '4' : '2', _this._id);
+                }
+                else {
+                    reject(new Error('This method is not available if filemasking is not enabled.'));
+                }
+            });
+        });
+    };
+    return ItemEffect;
+})();
+exports.ItemEffect = ItemEffect;
+},{"../../internal/item":41,"../../util/color":55}],17:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var item_1 = require('../../internal/item');
 var rectangle_1 = require('../../util/rectangle');
 var ItemLayout = (function () {
     function ItemLayout() {
     }
+    ItemLayout.prototype._getCanvasAndZRotate = function (value) {
+        var rotationObject = {};
+        if (value >= -180 && value <= -135) {
+            rotationObject['canvasRotate'] = 180;
+            rotationObject['zRotate'] = value + 180;
+            rotationObject['orientation'] = 'landscape';
+        }
+        else if (value > -135 && value < -45) {
+            rotationObject['canvasRotate'] = 270;
+            rotationObject['zRotate'] = value + 90;
+            rotationObject['orientation'] = 'portrait';
+        }
+        else if (value >= -45 && value <= 45) {
+            rotationObject['canvasRotate'] = 0;
+            rotationObject['zRotate'] = value;
+            rotationObject['orientation'] = 'landscape';
+        }
+        else if (value > 45 && value < 135) {
+            rotationObject['canvasRotate'] = 90;
+            rotationObject['zRotate'] = value - 90;
+            rotationObject['orientation'] = 'portrait';
+        }
+        else if (value >= 135 && value <= 180) {
+            rotationObject['canvasRotate'] = 180;
+            rotationObject['zRotate'] = value - 180;
+            rotationObject['orientation'] = 'landscape';
+        }
+        return rotationObject;
+    };
+    ItemLayout.prototype._adjustRotation = function (value) {
+        if (value > 180) {
+            value -= 360;
+        }
+        else if (value < -180) {
+            value += 360;
+        }
+        return value;
+    };
     ItemLayout.prototype.isKeepAspectRatio = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:keep_ar', slot).then(function (val) {
+            item_1.Item.get('prop:keep_ar', _this._id).then(function (val) {
                 resolve(val === '1');
             });
         });
@@ -2432,8 +4340,7 @@ var ItemLayout = (function () {
     ItemLayout.prototype.setKeepAspectRatio = function (value) {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.set('prop:keep_ar', value ? '1' : '0', slot).then(function () {
+            item_1.Item.set('prop:keep_ar', value ? '1' : '0', _this._id).then(function () {
                 resolve(_this);
             });
         });
@@ -2441,8 +4348,7 @@ var ItemLayout = (function () {
     ItemLayout.prototype.isPositionLocked = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:lockmove', slot).then(function (val) {
+            item_1.Item.get('prop:lockmove', _this._id).then(function (val) {
                 resolve(val === '1');
             });
         });
@@ -2450,8 +4356,7 @@ var ItemLayout = (function () {
     ItemLayout.prototype.setPositionLocked = function (value) {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.set('prop:lockmove', value ? '1' : '0', slot).then(function () {
+            item_1.Item.set('prop:lockmove', value ? '1' : '0', _this._id).then(function () {
                 resolve(_this);
             });
         });
@@ -2459,8 +4364,7 @@ var ItemLayout = (function () {
     ItemLayout.prototype.isEnhancedResizeEnabled = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:mipmaps', slot).then(function (val) {
+            item_1.Item.get('prop:mipmaps', _this._id).then(function (val) {
                 resolve(val === '1');
             });
         });
@@ -2468,8 +4372,7 @@ var ItemLayout = (function () {
     ItemLayout.prototype.setEnhancedResizeEnabled = function (value) {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.set('prop:mipmaps', value ? '1' : '0', slot).then(function () {
+            item_1.Item.set('prop:mipmaps', value ? '1' : '0', _this._id).then(function () {
                 resolve(_this);
             });
         });
@@ -2477,29 +4380,30 @@ var ItemLayout = (function () {
     ItemLayout.prototype.getPosition = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:pos', slot).then(function (val) {
-                var _a = decodeURIComponent(val).split(','), left = _a[0], top = _a[1], right = _a[2], bottom = _a[3];
-                _this.position = rectangle_1.Rectangle.fromCoordinates(Number(top), Number(left), Number(right), Number(bottom));
+            item_1.Item.get('prop:pos', _this._id).then(function (val) {
+                var _a = String(val).split(','), left = _a[0], top = _a[1], right = _a[2], bottom = _a[3];
+                _this.position = rectangle_1.Rectangle.fromCoordinates(Number(left), Number(top), Number(right), Number(bottom));
                 resolve(_this.position);
             });
         });
     };
     ItemLayout.prototype.setPosition = function (value) {
         var _this = this;
-        return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            _this.position = value;
-            item_1.Item.set('prop:pos', value.toCoordinateString(), slot).then(function () {
-                resolve(_this);
-            });
+        return new Promise(function (resolve, reject) {
+            try {
+                item_1.Item.set('prop:pos', value.toCoordinateString(), _this._id).then(function () {
+                    resolve(_this);
+                });
+            }
+            catch (err) {
+                reject(err);
+            }
         });
     };
     ItemLayout.prototype.getRotateY = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:rotate_y', slot).then(function (val) {
+            item_1.Item.get('prop:rotate_y', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -2511,8 +4415,7 @@ var ItemLayout = (function () {
                 reject(Error('Invalid value. Min: -360, Max: 360'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:rotate_y', String(value), slot).then(function () {
+                item_1.Item.set('prop:rotate_y', String(value), _this._id).then(function () {
                     resolve(_this);
                 });
             }
@@ -2521,8 +4424,7 @@ var ItemLayout = (function () {
     ItemLayout.prototype.getRotateX = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:rotate_x', slot).then(function (val) {
+            item_1.Item.get('prop:rotate_x', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -2534,8 +4436,7 @@ var ItemLayout = (function () {
                 reject(Error('Invalid value. Min: -360, Max: 360'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:rotate_x', String(value), slot).then(function () {
+                item_1.Item.set('prop:rotate_x', String(value), _this._id).then(function () {
                     resolve(_this);
                 });
             }
@@ -2544,8 +4445,7 @@ var ItemLayout = (function () {
     ItemLayout.prototype.getRotateZ = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:rotate_z', slot).then(function (val) {
+            item_1.Item.get('prop:rotate_z', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -2557,25 +4457,743 @@ var ItemLayout = (function () {
                 reject(Error('Invalid value. Min: -360, Max: 360'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:rotate_z', String(value), slot).then(function () {
+                item_1.Item.set('prop:rotate_z', String(value), _this._id).then(function () {
                     resolve(_this);
                 });
+            }
+        });
+    };
+    ItemLayout.prototype.getCropping = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var cropObject = {};
+            item_1.Item.get('prop:crop', _this._id).then(function (val) {
+                var _a = String(val).split(','), left = _a[0], top = _a[1], right = _a[2], bottom = _a[3];
+                cropObject['left'] = Number(left);
+                cropObject['top'] = Number(top);
+                cropObject['right'] = Number(right);
+                cropObject['bottom'] = Number(bottom);
+                resolve(cropObject);
+            });
+        });
+    };
+    ItemLayout.prototype.setCropping = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (value.hasOwnProperty('top') && value.hasOwnProperty('left') &&
+                value.hasOwnProperty('right') && value.hasOwnProperty('bottom')) {
+                item_1.Item.set('prop:crop', value['left'].toFixed(6) + ',' +
+                    value['top'].toFixed(6) + ',' + value['right'].toFixed(6) + ',' +
+                    value['bottom'].toFixed(6), _this._id).then(function () {
+                    resolve(_this);
+                });
+            }
+            else {
+                reject('Error setting cropping,' +
+                    ' insufficient properties (left, top, right, bottom)');
+            }
+        });
+    };
+    ItemLayout.prototype.getCanvasRotate = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:rotate_canvas', _this._id).then(function (val) {
+                var value = Number(val);
+                if ([0, 90, 180, 270].indexOf(value) < 0) {
+                    resolve(0);
+                }
+                else {
+                    resolve(value);
+                }
+            });
+        });
+    };
+    ItemLayout.prototype.setCanvasRotate = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if ([0, 90, 180, 270].indexOf(value) < 0) {
+                reject(Error('Invalid value. Only possible values are 0, 90, 180 and 270'));
+            }
+            else {
+                item_1.Item.set('prop:rotate_canvas', String(value), _this._id).then(function () {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    ItemLayout.prototype.getEnhancedRotate = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var rotateZ;
+            var rotateCanvas;
+            var rotateValue;
+            item_1.Item.get('prop:rotate_z', _this._id).then(function (val) {
+                rotateZ = Number(val);
+                return item_1.Item.get('prop:rotate_canvas', _this._id);
+            }).then(function (val) {
+                rotateCanvas = Number(val);
+                rotateValue = _this._adjustRotation(rotateCanvas + rotateZ);
+                resolve(rotateValue);
+            });
+        });
+    };
+    ItemLayout.prototype.setEnhancedRotate = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (value < -180 || value > 180) {
+                reject(Error('Invalid value. Min: -180, Max: 180'));
+            }
+            else {
+                var formerObject;
+                var valueObject = _this._getCanvasAndZRotate(Number(value));
+                _this.getEnhancedRotate().then(function (val) {
+                    formerObject = _this._getCanvasAndZRotate(Number(val));
+                    return item_1.Item.set('prop:rotate_z', String(valueObject['zRotate']), _this._id);
+                }).then(function () {
+                    return item_1.Item.set('prop:rotate_canvas', String(valueObject['canvasRotate']), _this._id);
+                }).then(function () {
+                    if (formerObject['orientation'] !== valueObject['orientation']) {
+                        // interChangeHeightAndWidth();
+                        var outputResolution;
+                        var widthMax;
+                        var heightMax;
+                        item_1.Item.get('mixerresolution', _this._id).then(function (val) {
+                            outputResolution = val.split(',');
+                            widthMax = Number(outputResolution[0]);
+                            heightMax = Number(outputResolution[1]);
+                            return item_1.Item.get('prop:pos', _this._id);
+                        }).then(function (val) {
+                            var position = val.split(',');
+                            var leftPosition = parseFloat(position[0]) * widthMax;
+                            var topPosition = parseFloat(position[1]) * heightMax;
+                            var rightPosition = parseFloat(position[2]) * widthMax;
+                            var bottomPosition = parseFloat(position[3]) * heightMax;
+                            var newLeft;
+                            var newRight;
+                            var newTop;
+                            var newBottom;
+                            var widthValue = Math.round(rightPosition - leftPosition);
+                            var heightValue = Math.round(bottomPosition - topPosition);
+                            if (heightValue > widthMax) {
+                                newLeft = 0;
+                                newRight = widthMax;
+                            }
+                            else {
+                                var xCenter = leftPosition +
+                                    ((rightPosition - leftPosition) / 2);
+                                newLeft = xCenter - (heightValue / 2);
+                                newRight = xCenter + (heightValue / 2);
+                            }
+                            if (widthValue > heightMax) {
+                                newTop = 0;
+                                newBottom = heightMax;
+                            }
+                            else {
+                                var yCenter = topPosition + ((bottomPosition - topPosition) / 2);
+                                newTop = yCenter - (widthValue / 2);
+                                newBottom = yCenter + (widthValue / 2);
+                            }
+                            var leftPos = newLeft / widthMax;
+                            var topPos = newTop / heightMax;
+                            var rightPos = newRight / widthMax;
+                            var bottomPos = newBottom / heightMax;
+                            return item_1.Item.set('prop:pos', leftPos.toFixed(6) + ',' +
+                                topPos.toFixed(6) + ',' + rightPos.toFixed(6) + ',' +
+                                bottomPos.toFixed(6), _this._id);
+                        }).then(function () {
+                            return item_1.Item.get('prop:posaspect', _this._id);
+                        }).then(function (val) {
+                            return item_1.Item.set('prop:pos', val, _this._id);
+                        });
+                    }
+                });
+            }
+        });
+    };
+    ItemLayout.prototype.setCroppingEnhanced = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (value.hasOwnProperty('top') && value.hasOwnProperty('left') &&
+                value.hasOwnProperty('right') && value.hasOwnProperty('bottom')) {
+                var originalWidth;
+                var originalHeight;
+                var outputResolution;
+                var position;
+                var canvasRotate;
+                var preCropPosition = {};
+                item_1.Item.get('mixerresolution', _this._id).then(function (val) {
+                    outputResolution = val.split(',');
+                    return item_1.Item.get('prop:pos', _this._id);
+                }).then(function (val) {
+                    position = val.split(',');
+                    return item_1.Item.get('prop:rotate_canvas', _this._id);
+                }).then(function (val) {
+                    canvasRotate = val;
+                    return item_1.Item.get('prop:crop', _this._id);
+                }).then(function (val) {
+                    var mixerWidth = parseInt(outputResolution[0]);
+                    var mixerHeight = parseInt(outputResolution[1]);
+                    var leftPositionInit = parseFloat(position[0]) * mixerWidth;
+                    var topPositionInit = parseFloat(position[1]) * mixerHeight;
+                    var rightPositionInit = parseFloat(position[2]) * mixerWidth;
+                    var bottomPositionInit = parseFloat(position[3]) * mixerHeight;
+                    var widthValue = rightPositionInit - leftPositionInit;
+                    var heightValue = bottomPositionInit - topPositionInit;
+                    var crop = val.split(',');
+                    var leftCropRaw = parseFloat(crop[0]);
+                    var topCropRaw = parseFloat(crop[1]);
+                    var rightCropRaw = parseFloat(crop[2]);
+                    var bottomCropRaw = parseFloat(crop[3]);
+                    var leftValue = Math.round(leftCropRaw * 100);
+                    var topValue = Math.round(topCropRaw * 100);
+                    var rightValue = Math.round(rightCropRaw * 100);
+                    var bottomValue = Math.round(bottomCropRaw * 100);
+                    var isNoCropping = ((leftValue == 0) && (topValue == 0) &&
+                        (rightValue == 0) && (bottomValue == 0));
+                    if (canvasRotate == 270) {
+                        if (isNoCropping) {
+                            preCropPosition = position;
+                            originalHeight = widthValue;
+                            originalWidth = heightValue;
+                        }
+                        else {
+                            var leftPosition = parseFloat(position[3]);
+                            var topPosition = parseFloat(position[0]);
+                            var rightPosition = parseFloat(position[1]);
+                            var bottomPosition = parseFloat(position[2]);
+                            if (leftCropRaw != 0 || rightCropRaw != 0) {
+                                originalWidth = heightValue / (1 - rightCropRaw - leftCropRaw);
+                                var leftDifference = (originalWidth * leftCropRaw) / mixerHeight;
+                                preCropPosition[3] = leftPosition + leftDifference;
+                                var rightDifference = (originalWidth * rightCropRaw) /
+                                    mixerHeight;
+                                preCropPosition[1] = rightPosition - rightDifference;
+                            }
+                            else {
+                                originalWidth = heightValue;
+                            }
+                            if (topCropRaw != 0 || bottomCropRaw != 0) {
+                                originalHeight = widthValue / (1 - bottomCropRaw - topCropRaw);
+                                var topDifference = (originalHeight * topCropRaw) / mixerWidth;
+                                preCropPosition[0] = topPosition - topDifference;
+                                var bottomDifference = (originalHeight * bottomCropRaw) /
+                                    mixerWidth;
+                                preCropPosition[2] = bottomPosition + bottomDifference;
+                            }
+                            else {
+                                originalHeight = widthValue;
+                            }
+                            if (leftCropRaw == 0) {
+                                preCropPosition[3] = position[3];
+                            }
+                            if (topCropRaw == 0) {
+                                preCropPosition[0] = position[0];
+                            }
+                            if (rightCropRaw == 0) {
+                                preCropPosition[1] = position[1];
+                            }
+                            if (bottomCropRaw == 0) {
+                                preCropPosition[2] = position[2];
+                            }
+                        }
+                    }
+                    else if (canvasRotate == 180) {
+                        if (isNoCropping) {
+                            preCropPosition = position;
+                            originalWidth = widthValue;
+                            originalHeight = heightValue;
+                        }
+                        else {
+                            var leftPosition = parseFloat(position[2]);
+                            var topPosition = parseFloat(position[3]);
+                            var rightPosition = parseFloat(position[0]);
+                            var bottomPosition = parseFloat(position[1]);
+                            if (leftCropRaw != 0 || rightCropRaw != 0) {
+                                originalWidth = widthValue / (1 - rightCropRaw - leftCropRaw);
+                                var leftDifference = (originalWidth * leftCropRaw) / mixerWidth;
+                                preCropPosition[2] = leftPosition + leftDifference;
+                                var rightDifference = (originalWidth * rightCropRaw) / mixerWidth;
+                                preCropPosition[0] = rightPosition - rightDifference;
+                            }
+                            else {
+                                originalWidth = widthValue;
+                            }
+                            if (topCropRaw != 0 || bottomCropRaw != 0) {
+                                originalHeight = heightValue / (1 - bottomCropRaw - topCropRaw);
+                                var topDifference = (originalHeight * topCropRaw) / mixerHeight;
+                                preCropPosition[3] = topPosition + topDifference;
+                                var bottomDifference = (originalHeight * bottomCropRaw) /
+                                    mixerHeight;
+                                preCropPosition[1] = bottomPosition - bottomDifference;
+                            }
+                            else {
+                                originalHeight = heightValue;
+                            }
+                            if (leftCropRaw == 0) {
+                                preCropPosition[2] = position[2];
+                            }
+                            if (topCropRaw == 0) {
+                                preCropPosition[3] = position[3];
+                            }
+                            if (rightCropRaw == 0) {
+                                preCropPosition[0] = position[0];
+                            }
+                            if (bottomCropRaw == 0) {
+                                preCropPosition[1] = position[1];
+                            }
+                        }
+                    }
+                    else if (canvasRotate == 90) {
+                        if (isNoCropping) {
+                            preCropPosition = position;
+                            originalHeight = widthValue;
+                            originalWidth = heightValue;
+                        }
+                        else {
+                            var leftPosition = parseFloat(position[1]);
+                            var topPosition = parseFloat(position[2]);
+                            var rightPosition = parseFloat(position[3]);
+                            var bottomPosition = parseFloat(position[0]);
+                            if (leftCropRaw != 0 || rightCropRaw != 0) {
+                                originalWidth = heightValue / (1 - rightCropRaw - leftCropRaw);
+                                var leftDifference = (originalWidth * leftCropRaw) / mixerHeight;
+                                preCropPosition[1] = leftPosition - leftDifference;
+                                var rightDifference = (originalWidth * rightCropRaw) /
+                                    mixerHeight;
+                                preCropPosition[3] = rightPosition + rightDifference;
+                            }
+                            else {
+                                originalWidth = heightValue;
+                            }
+                            if (topCropRaw != 0 || bottomCropRaw != 0) {
+                                originalHeight = widthValue / (1 - bottomCropRaw - topCropRaw);
+                                var topDifference = (originalHeight * topCropRaw) / mixerWidth;
+                                preCropPosition[2] = topPosition + topDifference;
+                                var bottomDifference = (originalHeight * bottomCropRaw) /
+                                    mixerWidth;
+                                preCropPosition[0] = bottomPosition - bottomDifference;
+                            }
+                            else {
+                                originalHeight = widthValue;
+                            }
+                            if (leftCropRaw == 0) {
+                                preCropPosition[1] = position[1];
+                            }
+                            if (topCropRaw == 0) {
+                                preCropPosition[2] = position[2];
+                            }
+                            if (rightCropRaw == 0) {
+                                preCropPosition[3] = position[3];
+                            }
+                            if (bottomCropRaw == 0) {
+                                preCropPosition[0] = position[0];
+                            }
+                        }
+                    }
+                    else {
+                        if (isNoCropping) {
+                            preCropPosition = position;
+                            originalHeight = heightValue;
+                            originalWidth = widthValue;
+                        }
+                        else {
+                            var leftPosition = parseFloat(position[0]);
+                            var topPosition = parseFloat(position[1]);
+                            var rightPosition = parseFloat(position[2]);
+                            var bottomPosition = parseFloat(position[3]);
+                            if (leftCropRaw != 0 || rightCropRaw != 0) {
+                                originalWidth = widthValue / (1 - rightCropRaw - leftCropRaw);
+                                var leftDifference = (originalWidth * leftCropRaw) / mixerWidth;
+                                preCropPosition[0] = leftPosition - leftDifference;
+                                var rightDifference = (originalWidth * rightCropRaw) /
+                                    mixerWidth;
+                                preCropPosition[2] = rightPosition + rightDifference;
+                            }
+                            else {
+                                originalWidth = widthValue;
+                            }
+                            if (topCropRaw != 0 || bottomCropRaw != 0) {
+                                originalHeight = heightValue / (1 - bottomCropRaw - topCropRaw);
+                                var topDifference = (originalHeight * topCropRaw) / mixerHeight;
+                                preCropPosition[1] = topPosition - topDifference;
+                                var bottomDifference = (originalHeight * bottomCropRaw) /
+                                    mixerHeight;
+                                preCropPosition[3] = bottomPosition + bottomDifference;
+                            }
+                            else {
+                                originalHeight = heightValue;
+                            }
+                            if (leftCropRaw == 0) {
+                                preCropPosition[0] = position[0];
+                            }
+                            if (topCropRaw == 0) {
+                                preCropPosition[1] = position[1];
+                            }
+                            if (rightCropRaw == 0) {
+                                preCropPosition[2] = position[2];
+                            }
+                            if (bottomCropRaw == 0) {
+                                preCropPosition[3] = position[3];
+                            }
+                        }
+                    }
+                    var leftCrop = value['left'];
+                    var topCrop = value['top'];
+                    var rightCrop = value['right'];
+                    var bottomCrop = value['bottom'];
+                    var leftPosition = parseFloat(preCropPosition[0]);
+                    var topPosition = parseFloat(preCropPosition[1]);
+                    var rightPosition = parseFloat(preCropPosition[2]);
+                    var bottomPosition = parseFloat(preCropPosition[3]);
+                    var sourceHeight = (bottomPosition - topPosition) * mixerHeight;
+                    var sourceWidth = (rightPosition - leftPosition) * mixerWidth;
+                    var newLeft, newTop, newRight, newBottom;
+                    if (canvasRotate == 270) {
+                        newLeft = ((topCrop * sourceWidth) / mixerWidth) + leftPosition;
+                        newTop = ((rightCrop * sourceHeight) / mixerHeight) + topPosition;
+                        newRight = rightPosition - ((bottomCrop * sourceWidth) / mixerWidth);
+                        newBottom = bottomPosition -
+                            ((leftCrop * sourceHeight) / mixerHeight);
+                    }
+                    else if (canvasRotate == 180) {
+                        newLeft = ((rightCrop * sourceWidth) / mixerWidth) + leftPosition;
+                        newTop = ((bottomCrop * sourceHeight) / mixerHeight) + topPosition;
+                        newRight = rightPosition - ((leftCrop * sourceWidth) / mixerWidth);
+                        newBottom = bottomPosition -
+                            ((topCrop * sourceHeight) / mixerHeight);
+                    }
+                    else if (canvasRotate == 90) {
+                        newLeft = ((bottomCrop * sourceWidth) / mixerWidth) + leftPosition;
+                        newTop = ((leftCrop * sourceHeight) / mixerHeight) + topPosition;
+                        newRight = rightPosition - ((topCrop * sourceWidth) / mixerWidth);
+                        newBottom = bottomPosition -
+                            ((rightCrop * sourceHeight) / mixerHeight);
+                    }
+                    else {
+                        newLeft = ((leftCrop * sourceWidth) / mixerWidth) + leftPosition;
+                        newTop = ((topCrop * sourceHeight) / mixerHeight) + topPosition;
+                        newRight = rightPosition - ((rightCrop * sourceWidth) / mixerWidth);
+                        newBottom = bottomPosition -
+                            ((bottomCrop * sourceHeight) / mixerHeight);
+                    }
+                    item_1.Item.set('prop:crop', value['left'].toFixed(6) + ',' +
+                        value['top'].toFixed(6) + ',' + value['right'].toFixed(6) + ',' +
+                        value['bottom'].toFixed(6), _this._id).then(function () {
+                        return item_1.Item.set('prop:pos', newLeft.toFixed(6) + ',' +
+                            newTop.toFixed(6) + ',' + newRight.toFixed(6) + ',' +
+                            newBottom.toFixed(6), _this._id);
+                    }).then(function () {
+                        resolve(_this);
+                    });
+                });
+            }
+            else {
+                reject('Error setting cropping,' +
+                    ' insufficient properties (left, top, right, bottom)');
             }
         });
     };
     return ItemLayout;
 })();
 exports.ItemLayout = ItemLayout;
-},{"../../internal/item":21,"../../util/rectangle":34}],13:[function(require,module,exports){
+},{"../../internal/item":41,"../../util/rectangle":59}],18:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
+var mixin_1 = require('../../internal/util/mixin');
+var ilayout_1 = require('./ilayout');
+var icolor_1 = require('./icolor');
+var ichroma_1 = require('./ichroma');
+var ieffects_1 = require('./ieffects');
+var itransition_1 = require('./itransition');
+var item_1 = require('./item');
+/**
+ * The ImageItem class represents an image item (includes GIF files).
+ *
+ * Inherits from: {@link #core/Item Core/Item}
+ *
+ * Implements: {@link #core/IItemChroma Core/IItemChroma},
+ * {@link #core/IItemColor Core/IItemColor},
+ * {@link #core/IItemLayout Core/IItemLayout},
+ * {@link #core/IItemTransition Core/IItemTransition},
+ * {@link #core/IItemEffect Core/IItemEffect}
+ *
+ *  All methods marked as *Chainable* resolve with the original `ImageItem`
+ *  instance.
+ */
+var ImageItem = (function (_super) {
+    __extends(ImageItem, _super);
+    function ImageItem() {
+        _super.apply(this, arguments);
+    }
+    return ImageItem;
+})(item_1.Item);
+exports.ImageItem = ImageItem;
+mixin_1.applyMixins(ImageItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition, ieffects_1.ItemEffect]);
+},{"../../internal/util/mixin":43,"./ichroma":13,"./icolor":14,"./ieffects":16,"./ilayout":17,"./item":20,"./itransition":21}],19:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var item_1 = require('../../internal/item');
+var cuepoint_1 = require('./cuepoint');
+/**
+ *  Used by items that implement the Playback interface.
+ *  Check `getActionAfterPlayback()`/`setActionAfterPlayback()` method of
+ *  {@link #core/Mediaitem#getActionAfterPlayback Core/Mediaitem}.
+ */
+(function (ActionAfterPlayback) {
+    ActionAfterPlayback[ActionAfterPlayback["NONE"] = 0] = "NONE";
+    ActionAfterPlayback[ActionAfterPlayback["REWIND"] = 1] = "REWIND";
+    ActionAfterPlayback[ActionAfterPlayback["LOOP"] = 2] = "LOOP";
+    ActionAfterPlayback[ActionAfterPlayback["TRANSPARENT"] = 3] = "TRANSPARENT";
+    ActionAfterPlayback[ActionAfterPlayback["HIDE"] = 4] = "HIDE";
+})(exports.ActionAfterPlayback || (exports.ActionAfterPlayback = {}));
+var ActionAfterPlayback = exports.ActionAfterPlayback;
+var AUDIO_REGEX = /\.(mp3|aac|cda|ogg|m4a|flac|wma|aiff|aif|wav|mid|midi|rma)$/;
+var VIDEO_REGEX = /\.(avi|flv|mkv|mp4|mpg|wmv|3gp|3g2|asf|f4v|mov|mpeg|vob|webm)$/;
+var ItemPlayback = (function () {
+    function ItemPlayback() {
+    }
+    ItemPlayback.prototype.isSeekable = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('sync:syncable', _this._id).then(function (val) {
+                resolve(val === '1' ? true : false);
+            });
+        });
+    };
+    ItemPlayback.prototype.getPlaybackPosition = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('sync:position', _this._id).then(function (val) {
+                resolve(Number(val) / 10000000);
+            });
+        });
+    };
+    ItemPlayback.prototype.setPlaybackPosition = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('sync:position', String(value * 10000000), _this._id).then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    ItemPlayback.prototype.getPlaybackDuration = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('sync:duration', _this._id).then(function (val) {
+                resolve(Number(val) / 10000000);
+            });
+        });
+    };
+    ItemPlayback.prototype.isPlaying = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('sync:state', _this._id).then(function (val) {
+                resolve(val === "running");
+            });
+        });
+    };
+    ItemPlayback.prototype.setPlaying = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('sync:state', value ? "running" : "stopped", _this._id).then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    ItemPlayback.prototype.getPlaybackStartPosition = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:InPoint', _this._id).then(function (val) {
+                resolve(Number(val) / 10000000);
+            });
+        });
+    };
+    ItemPlayback.prototype.setPlaybackStartPosition = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:InPoint', String(value * 10000000), _this._id).then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    ItemPlayback.prototype.getPlaybackEndPosition = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:OutPoint', _this._id).then(function (val) {
+                resolve(Number(val) / 10000000);
+            });
+        });
+    };
+    ItemPlayback.prototype.setPlaybackEndPosition = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:OutPoint', String(value * 10000000), _this._id).then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    ItemPlayback.prototype.getActionAfterPlayback = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:OpWhenFinished', _this._id).then(function (val) {
+                resolve(Number(val));
+            });
+        });
+    };
+    ItemPlayback.prototype.setActionAfterPlayback = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:OpWhenFinished', String(value), _this._id).then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    ItemPlayback.prototype.isAutostartOnSceneLoad = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:StartOnLoad', _this._id).then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    ItemPlayback.prototype.setAutostartOnSceneLoad = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:StartOnLoad', (value ? '1' : '0'), _this._id).then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    ItemPlayback.prototype.isForceDeinterlace = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:fdeinterlace', _this._id).then(function (val) {
+                resolve(val === '3');
+            });
+        });
+    };
+    ItemPlayback.prototype.setForceDeinterlace = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:fdeinterlace', (value ? '3' : '0'), _this._id).then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    ItemPlayback.prototype.isRememberingPlaybackPosition = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:RememberPosition', _this._id).then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    ItemPlayback.prototype.setRememberingPlaybackPosition = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:RememberPosition', (value ? '1' : '0'), _this._id).then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    ItemPlayback.prototype.isShowingPlaybackPosition = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:ShowPosition', _this._id).then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    ItemPlayback.prototype.setShowingPlaybackPosition = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:ShowPosition', (value ? '1' : '0'), _this._id).then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    ItemPlayback.prototype.getCuePoints = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:CuePoints', _this._id).then(function (cuePointString) {
+                if (cuePointString === '') {
+                    resolve([]);
+                }
+                else {
+                    var cuePointStrings = cuePointString.split(',');
+                    var cuePoints = cuePointStrings.map(function (string) { return cuepoint_1.CuePoint._fromString(string); });
+                    resolve(cuePoints);
+                }
+            });
+        });
+    };
+    ItemPlayback.prototype.setCuePoints = function (cuePoints) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var cuePointString = cuePoints.map(function (point) { return point.toString(); }).join(',');
+            resolve(_this);
+        });
+    };
+    ItemPlayback.prototype.isAudio = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:item', _this._id).then(function (filename) {
+                resolve(AUDIO_REGEX.test(filename));
+            });
+        });
+    };
+    ItemPlayback.prototype.isVideo = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:item', _this._id).then(function (filename) {
+                resolve(VIDEO_REGEX.test(filename));
+            });
+        });
+    };
+    ItemPlayback.prototype.getValue = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            // we do not do any additional checking since we are assured of the type
+            item_1.Item.get('prop:item', _this._id).then(function (val) {
+                resolve(val);
+            });
+        });
+    };
+    ;
+    ItemPlayback.prototype.setValue = function (filename) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (VIDEO_REGEX.test(filename) || AUDIO_REGEX.test(filename)) {
+                item_1.Item.set('prop:item', filename, _this._id)
+                    .then(function () { return item_1.Item.set('prop:name', filename, _this._id); })
+                    .then(function () { return item_1.Item.set('prop:CuePoints', '', _this._id); })
+                    .then(function () {
+                    resolve(_this);
+                });
+            }
+            else {
+                reject(new Error('You can only set the value to a valid media type'));
+            }
+        });
+    };
+    return ItemPlayback;
+})();
+exports.ItemPlayback = ItemPlayback;
+},{"../../internal/item":41,"./cuepoint":8}],20:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var mixin_1 = require('../../internal/util/mixin');
 var item_1 = require('../../internal/item');
+var app_1 = require('../../internal/app');
 var environment_1 = require('../environment');
 var json_1 = require('../../internal/util/json');
 var xml_1 = require('../../internal/util/xml');
 var scene_1 = require('../scene');
 var ilayout_1 = require('./ilayout');
+var version_1 = require('../../internal/util/version');
 (function (ItemTypes) {
     ItemTypes[ItemTypes["UNDEFINED"] = 0] = "UNDEFINED";
     ItemTypes[ItemTypes["FILE"] = 1] = "FILE";
@@ -2588,9 +5206,17 @@ var ilayout_1 = require('./ilayout');
     ItemTypes[ItemTypes["HTML"] = 8] = "HTML";
 })(exports.ItemTypes || (exports.ItemTypes = {}));
 var ItemTypes = exports.ItemTypes;
+(function (ViewTypes) {
+    ViewTypes[ViewTypes["MAIN"] = 0] = "MAIN";
+    ViewTypes[ViewTypes["PREVIEW"] = 1] = "PREVIEW";
+    ViewTypes[ViewTypes["THUMBNAIL"] = 2] = "THUMBNAIL";
+})(exports.ViewTypes || (exports.ViewTypes = {}));
+var ViewTypes = exports.ViewTypes;
 /**
- * An `Item` represents an object that is used as a source on the stage.
- * Some possible sources are games, microphones, or a webpage.
+ * An `Item` represents an object that is used as a item on the stage.
+ * Some possible items are games, microphones, or a webpage.
+ *
+ * Implements: {@link #core/IItemLayout Core/IItemLayout}
  *
  * ### Basic Usage
  *
@@ -2614,9 +5240,9 @@ var ItemTypes = exports.ItemTypes;
  * var xjs = require('xjs');
  * var Item = xjs.Item;
  *
- * // a source that sets its own properties on load
+ * // an item that sets its own properties on load
  * xjs.ready()
- *    .then(Item.getCurrentSource)
+ *    .then(Item.getItemList)
  *    .then(function(item) {
  *     return item.setCustomName('MyCustomName');
  *  }).then(function(item) {
@@ -2632,10 +5258,11 @@ var Item = (function () {
         this._name = props['name'];
         this._cname = props['cname'];
         this._id = props['id'];
-        this._sceneID = props['sceneID'];
+        this._sceneId = props['sceneId'];
         this._value = props['value'];
         this._keepLoaded = props['keeploaded'];
         this._type = Number(props['type']);
+        this._globalsrc = props['globalsrc'];
         this._xmlparams = props;
     }
     /**
@@ -2662,11 +5289,30 @@ var Item = (function () {
     Item.prototype.setName = function (value) {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
             _this._name = value;
-            item_1.Item.set('prop:name', _this._name, slot).then(function () {
-                resolve(_this);
-            });
+            if (version_1.versionCompare(version_1.getVersion())
+                .is
+                .lessThan(version_1.minVersion)) {
+                item_1.Item.set('prop:name', _this._name, _this._id).then(function () {
+                    resolve(_this);
+                });
+            }
+            else {
+                item_1.Item.get('itemlist', _this._id).then(function (itemlist) {
+                    var promiseArray = [];
+                    var itemsArray = itemlist.split(',');
+                    itemsArray.forEach(function (itemId) {
+                        promiseArray.push(new Promise(function (itemResolve) {
+                            item_1.Item.set('prop:name', _this._name, itemId).then(function () {
+                                itemResolve(true);
+                            });
+                        }));
+                    });
+                    Promise.all(promiseArray).then(function () {
+                        resolve(_this);
+                    });
+                });
+            }
         });
     };
     /**
@@ -2685,8 +5331,7 @@ var Item = (function () {
     Item.prototype.getName = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:name', slot).then(function (val) {
+            item_1.Item.get('prop:name', _this._id).then(function (val) {
                 _this._name = val;
                 resolve(val);
             });
@@ -2720,9 +5365,8 @@ var Item = (function () {
     Item.prototype.setCustomName = function (value) {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
             _this._cname = value;
-            item_1.Item.set('prop:cname', _this._cname, slot).then(function () {
+            item_1.Item.set('prop:cname', _this._cname, _this._id).then(function () {
                 resolve(_this);
             });
         });
@@ -2743,8 +5387,7 @@ var Item = (function () {
     Item.prototype.getCustomName = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:cname', slot).then(function (val) {
+            item_1.Item.get('prop:cname', _this._id).then(function (val) {
                 _this._cname = val;
                 resolve(val);
             });
@@ -2753,7 +5396,7 @@ var Item = (function () {
     /**
      * return: Promise<string|XML>
      *
-     * Gets the custom name of the item.
+     * Gets a special string that refers to the item's main definition.
      *
      * This method can resolve with an XML object, which is an object generated by
      * the framework. Call `toString()` to transform into an XML String. (See the
@@ -2762,16 +5405,15 @@ var Item = (function () {
      * #### Usage
      *
      * ```javascript
-     * item.getCustomName().then(function(name) {
-     *   // Do something with the name
+     * item.getValue().then(function(value) {
+     *   // Do something with the value
      * });
      * ```
      */
     Item.prototype.getValue = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:item', slot).then(function (val) {
+            item_1.Item.get('prop:item', _this._id).then(function (val) {
                 val = (val === 'null') ? '' : val;
                 if (val === '') {
                     _this._value = '';
@@ -2797,7 +5439,8 @@ var Item = (function () {
      * return: Promise<Item>
      * ```
      *
-     * Set the video item's main definition.
+     * Set the item's main definition; this special string defines the item's
+     * "identity". Each type of item requires a different format for this value.
      *
      * *Chainable.*
      *
@@ -2826,7 +5469,6 @@ var Item = (function () {
     Item.prototype.setValue = function (value) {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
             var val = (typeof value === 'string') ?
                 value : value.toString();
             if (typeof value !== 'string') {
@@ -2835,7 +5477,7 @@ var Item = (function () {
             else {
                 _this._value = val;
             }
-            item_1.Item.set('prop:item', val, slot).then(function () {
+            item_1.Item.set('prop:item', val, _this._id).then(function () {
                 resolve(_this);
             });
         });
@@ -2856,8 +5498,7 @@ var Item = (function () {
     Item.prototype.getKeepLoaded = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:keeploaded', slot).then(function (val) {
+            item_1.Item.get('prop:keeploaded', _this._id).then(function (val) {
                 _this._keepLoaded = (val === '1');
                 resolve(_this._keepLoaded);
             });
@@ -2870,6 +5511,9 @@ var Item = (function () {
      * ```
      *
      * Set Keep loaded option to ON or OFF
+     *
+     * Items with Keep loaded set to ON would emit `scene-load` event each time
+     * the active scene switches to the item's current scene.
      *
      * *Chainable.*
      *
@@ -2884,9 +5528,10 @@ var Item = (function () {
     Item.prototype.setKeepLoaded = function (value) {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
             _this._keepLoaded = value;
-            item_1.Item.set('prop:keeploaded', (_this._keepLoaded ? '1' : '0'), slot)
+            _this._globalsrc = value;
+            item_1.Item.set('prop:globalsrc', (_this._globalsrc ? '1' : '0'), _this._id);
+            item_1.Item.set('prop:keeploaded', (_this._keepLoaded ? '1' : '0'), _this._id)
                 .then(function () {
                 resolve(_this);
             });
@@ -2908,8 +5553,7 @@ var Item = (function () {
     Item.prototype.getType = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:type', slot).then(function (val) {
+            item_1.Item.get('prop:type', _this._id).then(function (val) {
                 _this._type = ItemTypes[ItemTypes[Number(val)]];
                 resolve(_this._type);
             });
@@ -2923,12 +5567,12 @@ var Item = (function () {
      * #### Usage
      *
      * ```javascript
-     * item.getID().then(function(id) {
+     * item.getId().then(function(id) {
      *   // The rest of your code here
      * });
      * ```
      */
-    Item.prototype.getID = function () {
+    Item.prototype.getId = function () {
         var _this = this;
         return new Promise(function (resolve) {
             resolve(_this._id);
@@ -2942,15 +5586,71 @@ var Item = (function () {
      * #### Usage
      *
      * ```javascript
-     * item.getSceneID().then(function(id) {
+     * item.getSceneId().then(function(id) {
      *   // The rest of your code here
      * });
      * ```
      */
-    Item.prototype.getSceneID = function () {
+    Item.prototype.getSceneId = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            resolve(Number(_this._sceneID) + 1);
+            resolve(Number(_this._sceneId) + 1);
+        });
+    };
+    /**
+     * return: Promise<ViewTypes>
+     *
+     * Get the view type of the item
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * item.getView().then(function(view) {
+     *   // view values:
+     *   // 0 = main view
+     *   // 1 = preview editor
+     *   // 2 = thumbnail preview
+     * })
+     * ```
+     */
+    Item.prototype.getView = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:viewid', _this._id).then(function (viewId) {
+                var view = ViewTypes.MAIN;
+                if (viewId === '1') {
+                    var preview = app_1.App.getGlobalProperty('preview_editor_opened');
+                    view = preview === '1' ? ViewTypes.PREVIEW : ViewTypes.THUMBNAIL;
+                }
+                resolve(view);
+            });
+        });
+    };
+    /**
+     * return: Promise<string>
+     *
+     * Get the Source ID of the item.
+     * *Available only on XSplit Broadcaster verions higher than 2.8.1603.0401*
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * item.getSourceId().then(function(id) {
+     *   // The rest of your code here
+     * });
+     * ```
+     */
+    Item.prototype.getSourceId = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (version_1.versionCompare(version_1.getVersion()).is.lessThan(version_1.minVersion)) {
+                reject(new Error('Only available on versions above ' + version_1.minVersion));
+            }
+            else {
+                item_1.Item.get('prop:srcid', _this._id).then(function (srcid) {
+                    resolve(srcid);
+                });
+            }
         });
     };
     /**
@@ -2967,28 +5667,31 @@ var Item = (function () {
      */
     Item.prototype.toXML = function () {
         var item = new json_1.JSON();
-        item['tag'] = 'item';
-        item['name'] = this._name;
-        item['item'] = this._value;
-        item['type'] = this._type;
-        item['selfclosing'] = true;
-        if (this._cname) {
-            item['cname'] = this._cname;
+        for (var prop in this._xmlparams) {
+            if (!{}.hasOwnProperty.call(this._xmlparams, prop))
+                continue;
+            item[prop] = this._xmlparams[prop];
         }
+        item['tag'] = 'item';
+        item['selfclosing'] = true;
         return xml_1.XML.parseJSON(item);
     };
     /**
      * return: Promise<Item>
      *
+     * > #### For Deprecation
+     * This method is deprecated and will be removed soon. Please use
+     * {@link #core/Item#getItemList getItemList} instead.
+     *
      * Get the current source (when function is called by sources), or the source
-     * that was right-clicked to open the config window (when function is called
-     * from the config window)
+     * that was right-clicked to open the source properties window (when function is called
+     * from the source properties window)
      *
      * #### Usage
      *
      * ```javascript
-     * xjs.Item.getCurrentSource().then(function(item) {
-     *   // This will fetch the current item (the plugin)
+     * xjs.Source.getCurrentSource().then(function(source) {
+     *   // This will fetch the current source (the plugin)
      * }).catch(function(err) {
      *   // Handle the error here. Errors would only occur
      *   // if we try to execute this method on Extension plugins
@@ -2997,22 +5700,164 @@ var Item = (function () {
      */
     Item.getCurrentSource = function () {
         return new Promise(function (resolve, reject) {
+            console.warn('Warning! getCurrentSource is deprecated and will be ' +
+                'removed soon. Please use getItemList instead. (Only works for ' +
+                'XSplit Broadcaster versions above 2.8.xxxx.xxxx');
             if (environment_1.Environment.isExtension()) {
                 reject(Error('Extensions do not have sources ' +
                     'associated with them.'));
             }
-            else if (environment_1.Environment.isSourcePlugin() || environment_1.Environment.isSourceConfig()) {
-                scene_1.Scene.searchAllForItemId(item_1.Item.getBaseID()).then(function (item) {
-                    resolve(item); // this should always exist
+            else if ((environment_1.Environment.isSourcePlugin() || environment_1.Environment.isSourceConfig()) &&
+                version_1.versionCompare(version_1.getVersion())
+                    .is
+                    .greaterThan(version_1.minVersion)) {
+                Item.getItemList().then(function (items) {
+                    if (items.length > 0) {
+                        resolve(items[0]);
+                    }
+                    else {
+                        reject(Error('Cannot get item list'));
+                    }
                 });
             }
+            else if (environment_1.Environment.isSourcePlugin() || environment_1.Environment.isSourceConfig()) {
+                scene_1.Scene.searchItemsById(item_1.Item.getBaseId()).then(function (item) {
+                    resolve(item);
+                });
+            }
+        });
+    };
+    /**
+     * return: Promise<Item[]>
+     *
+     * Get the Item List of the current source
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * xjs.Item.getItemList().then(function(item) {
+     *   // This will fetch the item list of the current source
+     * }).catch(function(err) {
+     *   // Handle the error here. Errors would only occur
+     *   // if we try to execute this method on Extension plugins
+     * });
+     * ```
+     */
+    Item.getItemList = function () {
+        return new Promise(function (resolve, reject) {
+            if (environment_1.Environment.isExtension()) {
+                reject(Error('Extensions do not have sources associated with them.'));
+            }
+            else if (version_1.versionCompare(version_1.getVersion())
+                .is
+                .lessThan(version_1.minVersion)) {
+                reject(Error('Only available on versions above ' + version_1.minVersion));
+            }
+            else if (environment_1.Environment.isSourcePlugin() || environment_1.Environment.isSourceConfig()) {
+                item_1.Item.get('itemlist').then(function (itemlist) {
+                    var promiseArray = [];
+                    var itemsArray = itemlist.split(',');
+                    itemsArray.forEach(function (itemId) {
+                        promiseArray.push(new Promise(function (itemResolve) {
+                            scene_1.Scene.searchItemsById(itemId).then(function (item) {
+                                itemResolve(item);
+                            });
+                        }));
+                    });
+                    Promise.all(promiseArray).then(function (results) {
+                        resolve(results);
+                    });
+                });
+            }
+        });
+    };
+    /**
+     * return: Promise<Item[]>
+     *
+     * Get the item list of the attached item. This is useful when an item is
+     * an instance of a global source, with multiple other items having the same
+     * source as the current item.
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * // item pertains to an actual item instance
+     * item.getItemList().then(function(item) {
+     *   // This will fetch the item list of the current item
+     * }).catch(function(err) {
+     *   // Handle the error here. Errors would only occur
+     *   // if we try to execute this method on Extension plugins
+     * });
+     * ```
+     */
+    Item.prototype.getItemList = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (version_1.versionCompare(version_1.getVersion())
+                .is
+                .lessThan(version_1.minVersion)) {
+                reject(Error('Only available on versions above ' + version_1.minVersion));
+            }
+            else {
+                item_1.Item.get('itemlist', _this._id).then(function (itemlist) {
+                    var promiseArray = [];
+                    var itemsArray = itemlist.split(',');
+                    itemsArray.forEach(function (itemId) {
+                        promiseArray.push(new Promise(function (itemResolve) {
+                            scene_1.Scene.searchItemsById(itemId).then(function (item) {
+                                itemResolve(item);
+                            });
+                        }));
+                    });
+                    Promise.all(promiseArray).then(function (results) {
+                        resolve(results);
+                    });
+                });
+            }
+        });
+    };
+    /**
+     *  return: Promise<Item>
+     *
+     *  Refreshes the specified item.
+     *
+     *  #### Usage
+     *  ```javascript
+     *  // Sample 1: let item refresh itself
+     *  xjs.Item.getItemList().then(function(item) {
+     *    item.refresh(); // execution of JavaScript halts because of refresh
+     *  });
+     *
+     *  // Sample 2: refresh some other item 'otherItem'
+     *  otherItem.refresh().then(function(item) {
+     *    // further manipulation of other item goes here
+     *  });
+     *  ```
+     */
+    Item.prototype.refresh = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('refresh', '', _this._id).then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    /**
+     * Duplicate current item. Will duplicate item into the current scene
+     */
+    Item.prototype.duplicate = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            app_1.App.callFunc('additem', _this.toXML().toString()).then(function () {
+                resolve(true);
+            });
         });
     };
     return Item;
 })();
 exports.Item = Item;
 mixin_1.applyMixins(Item, [ilayout_1.ItemLayout]);
-},{"../../internal/item":21,"../../internal/util/json":22,"../../internal/util/mixin":23,"../../internal/util/xml":24,"../environment":3,"../scene":15,"./ilayout":12}],14:[function(require,module,exports){
+},{"../../internal/app":37,"../../internal/item":41,"../../internal/util/json":42,"../../internal/util/mixin":43,"../../internal/util/version":44,"../../internal/util/xml":45,"../environment":4,"../scene":25,"./ilayout":17}],21:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var item_1 = require('../../internal/item');
 var transition_1 = require('../transition');
@@ -3022,8 +5867,7 @@ var ItemTransition = (function () {
     ItemTransition.prototype.isVisible = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:visible', slot).then(function (val) {
+            item_1.Item.get('prop:visible', _this._id).then(function (val) {
                 resolve(val === '1' ? true : false);
             });
         });
@@ -3031,8 +5875,7 @@ var ItemTransition = (function () {
     ItemTransition.prototype.setVisible = function (value) {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.set('prop:visible', value ? '1' : '0', slot).then(function () {
+            item_1.Item.set('prop:visible', value ? '1' : '0', _this._id).then(function () {
                 resolve(_this);
             });
         });
@@ -3040,8 +5883,7 @@ var ItemTransition = (function () {
     ItemTransition.prototype.getTransition = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:transitionid', slot).then(function (val) {
+            item_1.Item.get('prop:transitionid', _this._id).then(function (val) {
                 if (val === '') {
                     resolve(transition_1.Transition.NONE);
                 }
@@ -3054,8 +5896,7 @@ var ItemTransition = (function () {
     ItemTransition.prototype.setTransition = function (value) {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.set('prop:transitionid', value.toString(), slot).then(function () {
+            item_1.Item.set('prop:transitionid', value.toString(), _this._id).then(function () {
                 resolve(_this);
             });
         });
@@ -3063,8 +5904,7 @@ var ItemTransition = (function () {
     ItemTransition.prototype.getTransitionTime = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            item_1.Item.get('prop:transitiontime', slot).then(function (val) {
+            item_1.Item.get('prop:transitiontime', _this._id).then(function (val) {
                 resolve(Number(val));
             });
         });
@@ -3076,8 +5916,7 @@ var ItemTransition = (function () {
                 reject(RangeError('Transparency may only be in the range 0 to 60000.'));
             }
             else {
-                var slot = item_1.Item.attach(_this._id);
-                item_1.Item.set('prop:transitiontime', String(value), slot).then(function () {
+                item_1.Item.set('prop:transitiontime', String(value), _this._id).then(function () {
                     resolve(_this);
                 });
             }
@@ -3086,21 +5925,677 @@ var ItemTransition = (function () {
     return ItemTransition;
 })();
 exports.ItemTransition = ItemTransition;
-},{"../../internal/item":21,"../transition":16}],15:[function(require,module,exports){
+},{"../../internal/item":41,"../transition":36}],22:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
+var mixin_1 = require('../../internal/util/mixin');
+var item_1 = require('../../internal/item');
+var ilayout_1 = require('./ilayout');
+var icolor_1 = require('./icolor');
+var ichroma_1 = require('./ichroma');
+var ieffects_1 = require('./ieffects');
+var itransition_1 = require('./itransition');
+var iplayback_1 = require('./iplayback');
+var iaudio_1 = require('./iaudio');
+var item_2 = require('./item');
+var json_1 = require('../../internal/util/json');
+/**
+ * The MediaItem class represents a playable media file.
+ *
+ * Inherits from: {@link #core/Item Core/Item}
+ *
+ * Implements: {@link #core/IItemChroma Core/IItemChroma},
+ * {@link #core/IItemColor Core/IItemColor},
+ * {@link #core/IItemLayout Core/IItemLayout},
+ * {@link #core/IItemTransition Core/IItemTransition},
+ * {@link #core/IItemAudio Core/IItemAudio},
+ * {@link #core/IItemPlayback Core/IItemPlayback}
+ *
+ *  All methods marked as *Chainable* resolve with the original `MediaItem`
+ *  instance.
+ */
+var MediaItem = (function (_super) {
+    __extends(MediaItem, _super);
+    function MediaItem() {
+        _super.apply(this, arguments);
+    }
+    /**
+     * return: Promise<object>
+     *
+     * Gets file information such as codecs, bitrate, resolution, etc.
+     *
+     * sample file info object format:
+     *
+     * {
+     *  "audio": {
+     *    "duration":"1436734690",
+     *    "samplerate":"44100",
+     *    "bitrate":"128000",
+     *    "codec":"mp3"},
+     *  "video":{
+     *    "frameduration":"333670",
+     *    "bitrate":"1132227",
+     *    "duration":"1436436440",
+     *    "height":"240",
+     *    "width":"320",
+     *    "codec":"mpeg4"}
+     * }
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * mediaItem.getFileInfo().then(function(value) {
+     *   // Do something with the value
+     *   var audioCodec;
+     *   if (typeof value['audio'] !== 'undefined' && typeof value['audio']['codec']) {
+     *     audioCodec = value['audio']['codec'];
+     *   }
+     * });
+     * ```
+     */
+    MediaItem.prototype.getFileInfo = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            item_1.Item.get('FileInfo', _this._id).then(function (val) {
+                try {
+                    var fileInfoObj = {};
+                    var fileInfoJXON = json_1.JSON.parse(val);
+                    if (typeof fileInfoJXON['children'] !== 'undefined'
+                        && fileInfoJXON['children'].length > 0) {
+                        var fileInfoChildren = fileInfoJXON['children'];
+                        for (var i = fileInfoChildren.length - 1; i >= 0; i--) {
+                            var child = fileInfoChildren[i];
+                            var childObj = {};
+                            var childObjKeys = Object.keys(child);
+                            for (var j = childObjKeys.length - 1; j >= 0; j--) {
+                                var key = childObjKeys[j];
+                                if (key !== 'value' && key !== 'tag') {
+                                    childObj[key] = child[key];
+                                }
+                            }
+                            var tag = child['tag'];
+                            fileInfoObj[tag] = childObj;
+                        }
+                        resolve(fileInfoObj);
+                    }
+                    else {
+                        resolve(fileInfoObj);
+                    }
+                }
+                catch (e) {
+                    reject(Error('Error retrieving file information'));
+                }
+            });
+        });
+    };
+    return MediaItem;
+})(item_2.Item);
+exports.MediaItem = MediaItem;
+mixin_1.applyMixins(MediaItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma,
+    itransition_1.ItemTransition, iplayback_1.ItemPlayback, iaudio_1.ItemAudio, ieffects_1.ItemEffect]);
+},{"../../internal/item":41,"../../internal/util/json":42,"../../internal/util/mixin":43,"./iaudio":12,"./ichroma":13,"./icolor":14,"./ieffects":16,"./ilayout":17,"./iplayback":19,"./item":20,"./itransition":21}],23:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
+var mixin_1 = require('../../internal/util/mixin');
+var item_1 = require('../../internal/item');
+var ilayout_1 = require('./ilayout');
+var icolor_1 = require('./icolor');
+var ichroma_1 = require('./ichroma');
+var ieffects_1 = require('./ieffects');
+var itransition_1 = require('./itransition');
+var item_2 = require('./item');
+var rectangle_1 = require('../../util/rectangle');
+var json_1 = require('../../internal/util/json');
+var xml_1 = require('../../internal/util/xml');
+/**
+ * The ScreenItem class represents a screen capture item.
+ *
+ * Inherits from: {@link #core/Item Core/Item}
+ *
+ * Implements: {@link #core/IItemChroma Core/IItemChroma},
+ * {@link #core/IItemColor Core/IItemColor},
+ * {@link #core/IItemLayout Core/IItemLayout},
+ * {@link #core/IItemTransition Core/IItemTransition},
+ * {@link #core/IItemEffect Core/IItemEffect}
+ *
+ *  All methods marked as *Chainable* resolve with the original `ScreenItem`
+ *  instance.
+ */
+var ScreenItem = (function (_super) {
+    __extends(ScreenItem, _super);
+    function ScreenItem() {
+        _super.apply(this, arguments);
+    }
+    /**
+     * return: Promise<Rectangle>
+     *
+     * Gets the Capture Area of the Screen Capture Item. Returns a Rectangle
+     * object.
+     *
+     * See also: {@link #util/Rectangle Util/Rectangle}
+     */
+    ScreenItem.prototype.getCaptureArea = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            _this.getValue().then(function (val) {
+                if (!(val instanceof xml_1.XML)) {
+                    resolve(rectangle_1.Rectangle.fromCoordinates(0, 0, 0, 0));
+                }
+                else {
+                    var _value = json_1.JSON.parse(val);
+                    resolve(rectangle_1.Rectangle.fromCoordinates(Number(_value['left']), Number(_value['top']), Number(_value['width']) + Number(_value['left']), Number(_value['height']) + Number(_value['top'])));
+                }
+            });
+        });
+    };
+    /**
+     * param: Promise<Rectangle>
+     * ```
+     * return: Promise<ScreenItem>
+     * ```
+     *
+     * Sets the Window Capture Area of the Screen Capture Item.
+     *
+     * *Chainable.*
+     *
+     * See also: {@link #util/Rectangle Util/Rectangle}
+     */
+    ScreenItem.prototype.setCaptureArea = function (dimension) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            _this.getValue().then(function (val) {
+                return new Promise(function (iResolve) {
+                    item_1.Item.get('screenresolution', _this._id).then(function (res) {
+                        var _res = res.split(',');
+                        iResolve({
+                            value: val,
+                            res: rectangle_1.Rectangle.fromCoordinates(Number(_res[0]), Number(_res[1]), Number(_res[2]), Number(_res[3]))
+                        });
+                    });
+                });
+            }).then(function (obj) {
+                var _config = new json_1.JSON();
+                if (!(obj.value instanceof xml_1.XML)) {
+                    _config['tag'] = 'screen';
+                    _config['module'] = '';
+                    _config['window'] = '';
+                    _config['hwnd'] = '0';
+                    _config['wclient'] = '0';
+                    _config['left'] = '0';
+                    _config['top'] = '0';
+                    _config['width'] = '0';
+                    _config['height'] = '0';
+                }
+                else {
+                    _config = json_1.JSON.parse(obj.value);
+                }
+                _config['left'] = dimension.getLeft() >= obj.res.getLeft() ?
+                    dimension.getLeft() : Number(_config['left']) >= obj.res.getLeft() ?
+                    _config['left'] : obj.res.getLeft();
+                _config['top'] = dimension.getTop() >= obj.res.getTop() ?
+                    dimension.getTop() : Number(_config['top']) >= obj.res.getTop() ?
+                    _config['top'] : obj.res.getTop();
+                _config['width'] = dimension.getWidth() <= obj.res.getWidth() ?
+                    dimension.getWidth() : Number(_config['width']) <=
+                    obj.res.getWidth() ? _config['width'] : obj.res.getWidth();
+                _config['height'] = dimension.getHeight() <= obj.res.getHeight() ?
+                    dimension.getHeight() : Number(_config['height']) <=
+                    obj.res.getHeight() ? _config['height'] : obj.res.getHeight();
+                _this.setValue(xml_1.XML.parseJSON(_config)).then(function () {
+                    resolve(_this);
+                });
+            });
+        });
+    };
+    /**
+     * return: Promise<boolean>
+     *
+     * Checks if the Screen Capture Item only captures the
+     * Client area (does not capture the title bar, menu bar, window border, etc.)
+     */
+    ScreenItem.prototype.isClientArea = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            _this.getValue().then(function (val) {
+                if (!(val instanceof xml_1.XML)) {
+                    resolve(false);
+                }
+                else {
+                    var _value = json_1.JSON.parse(val);
+                    resolve(_value['wclient'] === '1');
+                }
+            });
+        });
+    };
+    /**
+     * param: Promise<boolean>
+     * ```
+     * return: Promise<ScreenItem>
+     * ```
+     *
+     * Set the Screen Capture to capture the Client area only or include
+     * the titlebar, menu bar, window border, etc.
+     */
+    ScreenItem.prototype.setClientArea = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            _this.getValue().then(function (val) {
+                var _config = new json_1.JSON();
+                if (!(val instanceof xml_1.XML)) {
+                    _config['tag'] = 'screen';
+                    _config['module'] = '';
+                    _config['window'] = '';
+                    _config['hwnd'] = '0';
+                    _config['wclient'] = '0';
+                    _config['left'] = '0';
+                    _config['top'] = '0';
+                    _config['width'] = '0';
+                    _config['height'] = '0';
+                }
+                else {
+                    _config = json_1.JSON.parse(val);
+                }
+                _config['wclient'] = (value ? '1' : '0');
+                _this.setValue(xml_1.XML.parseJSON(_config)).then(function () {
+                    resolve(_this);
+                });
+            });
+        });
+    };
+    /**
+     * return: Promise<boolean>
+     *
+     * Checks if the Screen Capture Item captures a window based on
+     * the window's title.
+     */
+    ScreenItem.prototype.isStickToTitle = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:ScrCapTrackWindowTitle', _this._id).then(function (val) {
+                resolve(val === '0');
+            });
+        });
+    };
+    /**
+     * param: Promise<boolean>
+     * ```
+     * return: Promise<ScreenItem>
+     * ```
+     *
+     * Set the Screen Capture to capture the window based on the window title.
+     * Useful when capturing programs with multiple tabs, for you to only
+     * capture a particular tab.
+     */
+    ScreenItem.prototype.setStickToTitle = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:ScrCapTrackWindowTitle', value ? '0' : '1', _this._id)
+                .then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    /**
+     * return Promise<boolean>
+     *
+     * Checks if the Screen Capture layered window is selected.
+     */
+    ScreenItem.prototype.getCaptureLayered = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:ScrCapLayered', _this._id).then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    /**
+     * param: (value: boolean)
+     * ```
+     * return Promise<ScreenItem>
+     * ```
+     *
+     * Sets the Screen Capture Layered window
+     */
+    ScreenItem.prototype.setCaptureLayered = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:ScrCapLayered', value ? '1' : '0', _this._id).then(function (val) {
+                resolve(_this);
+            });
+        });
+    };
+    /**
+     * return Promise<boolean>
+     *
+     * Checks if the Exclusive Window capture is selected.
+     */
+    ScreenItem.prototype.getOptimizedCapture = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:ScrCapOptCapture1', _this._id).then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    /**
+     * param: (value: boolean)
+     * ```
+     * return Promise<ScreenItem>
+     * ```
+     *
+     * Sets the Exclusive Window capture.
+     */
+    ScreenItem.prototype.setOptimizedCapture = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:ScrCapOptCapture1', value ? '1' : '0', _this._id).then(function (val) {
+                resolve(_this);
+            });
+        });
+    };
+    /**
+     * return Promise<boolean>
+     *
+     * Checks if the Show mouse clicks is selected.
+     *
+     */
+    ScreenItem.prototype.getShowMouseClicks = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:ScrCapShowClicks', _this._id).then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    /**
+     * param: (value: boolean)
+     * ```
+     * return Promise<ScreenItem>
+     * ```
+     *
+     * Sets the Show mouse clicks.
+     */
+    ScreenItem.prototype.setShowMouseClicks = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:ScrCapShowClicks', value ? '1' : '0', _this._id).then(function (val) {
+                resolve(_this);
+            });
+        });
+    };
+    /**
+     * return Promise<boolean>
+     *
+     * Checks if the Show mouse is selected.
+     *
+     */
+    ScreenItem.prototype.getShowMouse = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:ScrCapShowMouse', _this._id).then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    /**
+     * param: (value: boolean)
+     * ```
+     * return Promise<ScreenItem>
+     * ```
+     *
+     * Sets the Show Mouse.
+     */
+    ScreenItem.prototype.setShowMouse = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:ScrCapShowMouse', value ? '1' : '0', _this._id).then(function (val) {
+                if (val === true) {
+                    item_1.Item.set('prop:ScrCapShowClicks', value ? '1' : '0', _this._id);
+                }
+                resolve(_this);
+            });
+        });
+    };
+    return ScreenItem;
+})(item_2.Item);
+exports.ScreenItem = ScreenItem;
+mixin_1.applyMixins(ScreenItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition,
+    ieffects_1.ItemEffect]);
+},{"../../internal/item":41,"../../internal/util/json":42,"../../internal/util/mixin":43,"../../internal/util/xml":45,"../../util/rectangle":59,"./ichroma":13,"./icolor":14,"./ieffects":16,"./ilayout":17,"./item":20,"./itransition":21}],24:[function(require,module,exports){
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var mixin_1 = require('../../internal/util/mixin');
+var ilayout_1 = require('./ilayout');
+var icolor_1 = require('./icolor');
+var item_1 = require('../../internal/item');
+var ichroma_1 = require('./ichroma');
+var itransition_1 = require('./itransition');
+var iconfig_1 = require('./iconfig');
+var item_2 = require('./item');
+var io_1 = require('../../util/io');
+/**
+ * The VideoPlaylistItem class represents the VideoPlaylist item that has been
+ * added to the stage.
+ *
+ * Inherits from: {@link #core/Item Core/Item}
+ *
+ * Implements: {@link #core/IItemChroma Core/IItemChroma},
+ * {@link #core/IItemColor Core/IItemColor},
+ * {@link #core/IItemLayout Core/IItemLayout},
+ * {@link #core/IItemTransition Core/IItemTransition},
+ * {@link #core/IItemConfigurable Core/IItemConfigurable}
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var XJS = require('xjs');
+ *
+ * XJS.Scene.getActiveScene().then(function(scene) {
+ *   scene.getItems().then(function(items) {
+ *     for (var i in items) {
+ *       if (items[i] instanceof XJS.VideoPlaylistItem) {
+ *         // Manipulate your VideoPlaylist Item here
+ *       }
+ *     }
+ *   });
+ * });
+ * ```
+ */
+var VideoPlaylistItem = (function (_super) {
+    __extends(VideoPlaylistItem, _super);
+    function VideoPlaylistItem() {
+        _super.apply(this, arguments);
+    }
+    /**
+     * return: Promise<string>
+     *
+     * Gets the now playing video of this VideoPlaylist item.
+     *
+     */
+    VideoPlaylistItem.prototype.getVideoNowPlaying = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:item', _this._id).then(function (playlist) {
+                var _playlist = String(playlist).slice(0, playlist.indexOf('*'));
+                resolve(_playlist);
+            });
+        });
+    };
+    /**
+     * param: (value: string|number)
+     *
+     * return: Promise<VideoPlaylistItem>
+     *
+     * Sets the now playing video of this VideoPlaylist item.
+     *
+     * ## Possible Values
+     * - STRING - file path
+     * - NUMBER - number|within the range of fileplaylist array length
+     *
+     */
+    VideoPlaylistItem.prototype.setVideoNowPlaying = function (value) {
+        var _this = this;
+        var file;
+        var _playlist;
+        return new Promise(function (resolve, reject) {
+            item_1.Item.get('prop:FilePlaylist', _this._id).then(function (playlist) {
+                _playlist = String(playlist).split('|');
+                for (var i = 0; i < _playlist.length; i++) {
+                    _playlist[i] = _playlist[i].slice(0, _playlist[i].indexOf('*'));
+                }
+                ;
+                return _playlist;
+            }).then(function (list) {
+                if (typeof value === 'string') {
+                    if (_playlist.indexOf(value) === -1) {
+                        reject(Error('File not found on Playlist.'));
+                    }
+                    else {
+                        var index = _playlist.indexOf(value);
+                        file = _playlist[index] + '*' + index;
+                        item_1.Item.set('prop:item', file, _this._id)
+                            .then(function (fileplaylist) {
+                            resolve(_this);
+                        });
+                    }
+                }
+                else if (typeof value === 'number' && value <= _playlist.length) {
+                    file = (_playlist[value] + '*' + value);
+                    item_1.Item.set('prop:item', file, _this._id)
+                        .then(function (fileplaylist) {
+                        resolve(this);
+                    });
+                }
+                else {
+                    reject(Error('Invalid value.'));
+                }
+                ;
+            });
+        });
+    };
+    ;
+    /**
+     * return: Promise<string[]>
+     *
+     * Gets the file paths of the playlist of this VideoPlaylist item.
+     *
+     */
+    VideoPlaylistItem.prototype.getVideoPlaylistItems = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.get('prop:FilePlaylist', _this._id).then(function (playlist) {
+                var _playlist = String(playlist).split('|');
+                for (var i = 0; i < _playlist.length; i++) {
+                    _playlist[i] = _playlist[i].slice(0, _playlist[i].indexOf('*'));
+                }
+                ;
+                resolve(_playlist);
+            });
+        });
+    };
+    ;
+    /**
+     * param: (file: string[])
+     *
+     * return: Promise<string>
+     *
+     * Sets the playlist of this VideoPlaylist item according to the specified
+     * file paths.
+     *
+     * This call would replace all the items on the playlist.
+     * The now playing item is also set to the first item of the new FilePlaylist.
+     *
+     */
+    VideoPlaylistItem.prototype.setVideoPlaylistItems = function (fileItems) {
+        var _this = this;
+        var fileString;
+        var filePromises = fileItems.map(function (filename) {
+            return io_1.IO.getVideoDuration(filename);
+        });
+        return new Promise(function (resolve, reject) {
+            Promise.all(filePromises).then(function (duration) {
+                for (var i = 0; i < fileItems.length; i++) {
+                    if (fileString === undefined) {
+                        fileString = fileItems[i] + '*' + i + '*1*'
+                            + duration[i] + '*100*0*0*0*0*0|';
+                    }
+                    else {
+                        fileString += fileItems[i] + '*' + i + '*1*'
+                            + duration[i] + '*100*0*0*0*0*0';
+                        if (i + 1 < fileItems.length) {
+                            fileString += '|';
+                        }
+                        ;
+                    }
+                    ;
+                }
+                ;
+                item_1.Item.set('prop:item', fileItems[0] + '*0', _this._id);
+                return fileString;
+            }).then(function (fileString) {
+                item_1.Item.set('prop:FilePlaylist', fileString, _this._id)
+                    .then(function (fileplaylist) {
+                    resolve(_this);
+                });
+            });
+        });
+    };
+    ;
+    return VideoPlaylistItem;
+})(item_2.Item);
+exports.VideoPlaylistItem = VideoPlaylistItem;
+mixin_1.applyMixins(VideoPlaylistItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition,
+    iconfig_1.ItemConfigurable]);
+},{"../../internal/item":41,"../../internal/util/mixin":43,"../../util/io":57,"./ichroma":13,"./icolor":14,"./iconfig":15,"./ilayout":17,"./item":20,"./itransition":21}],25:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var json_1 = require('../internal/util/json');
 var xml_1 = require('../internal/util/xml');
 var app_1 = require('../internal/app');
 var internal_1 = require('../internal/internal');
 var environment_1 = require('./environment');
-var item_1 = require('./item/item');
-var game_1 = require('./item/game');
-var camera_1 = require('./item/camera');
-var audio_1 = require('./item/audio');
-var html_1 = require('./item/html');
+var source_1 = require('./source/source');
+var game_1 = require('./source/game');
+var camera_1 = require('./source/camera');
+var audio_1 = require('./source/audio');
+var videoplaylist_1 = require('./source/videoplaylist');
+var html_1 = require('./source/html');
+var flash_1 = require('./source/flash');
+var screen_1 = require('./source/screen');
+var image_1 = require('./source/image');
+var media_1 = require('./source/media');
+var item_1 = require('./items/item');
+var game_2 = require('./items/game');
+var camera_2 = require('./items/camera');
+var audio_2 = require('./items/audio');
+var videoplaylist_2 = require('./items/videoplaylist');
+var html_2 = require('./items/html');
+var flash_2 = require('./items/flash');
+var screen_2 = require('./items/screen');
+var image_2 = require('./items/image');
+var media_2 = require('./items/media');
 var Scene = (function () {
-    function Scene(sceneNum) {
-        this._id = sceneNum - 1;
+    function Scene(sceneId) {
+        if (typeof sceneId === 'number') {
+            this._id = sceneId - 1;
+        }
+        else if (typeof sceneId === 'string') {
+            this._id = sceneId;
+        }
     }
     ;
     Scene._initializeScenePool = function () {
@@ -3110,10 +6605,28 @@ var Scene = (function () {
             }
         }
     };
+    Scene._initializeScenePoolAsync = function () {
+        return new Promise(function (resolve) {
+            app_1.App.get('presetcount').then(function (cnt) {
+                var count = Number(cnt);
+                (count > 12) ? Scene._maxScenes = count : Scene._maxScenes = 12;
+                for (var i = 0; i < Scene._maxScenes; i++) {
+                    Scene._scenePool[i] = new Scene(i + 1);
+                }
+                // Add special scene for preview editor (i12)
+                Scene._scenePool.push(new Scene('i12'));
+                resolve(Scene._maxScenes);
+            });
+        });
+    };
     /**
      * return: Scene
      *
      * Get a specific scene object given the scene number.
+     *
+     * ** FOR DEPRECATION **
+     * This method doesn't account for scenes greater than 12,
+     * which is needed to support for the scene in the XBC preview editor.
      *
      *
      * #### Usage
@@ -3128,6 +6641,28 @@ var Scene = (function () {
         return Scene._scenePool[sceneNum - 1];
     };
     /**
+     * return: Promise<Scene>
+     *
+     * Get a specific scene object given the scene number.
+     *
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * var scene1;
+     * Scene.getByIdAsync(1).then(function(scene) {
+     *   scene1 = scene;
+     * });
+     * ```
+     */
+    Scene.getByIdAsync = function (sceneNum) {
+        return new Promise(function (resolve) {
+            Scene._initializeScenePoolAsync().then(function (cnt) {
+                resolve(Scene._scenePool[sceneNum - 1]);
+            });
+        });
+    };
+    /**
      * return: Promise<Scene[]>
      *
      * Asynchronous functon to get a list of scene objects with a specific name.
@@ -3136,65 +6671,61 @@ var Scene = (function () {
      * #### Usage
      *
      * ```javascript
-     * var scenes = Scene.getByName('Game').then(function(scenes) {
-     *    // manipulate scenes
+     * Scene.getByName('Game').then(function(scenes) {
+     *   // manipulate scenes
      * });
      * ```
      */
     Scene.getByName = function (sceneName) {
-        // initialize if necessary
-        Scene._initializeScenePool();
-        var namePromise = Promise.all(Scene._scenePool.map(function (scene, index) {
-            return app_1.App.get('presetname:' + index).then(function (name) {
-                if (sceneName === name) {
-                    return Scene._scenePool[index];
-                }
-                else {
-                    return null;
-                }
-            });
-        }));
         return new Promise(function (resolve) {
-            namePromise.then(function (results) {
-                var returnArray = [];
-                for (var j = 0; j < results.length; ++j) {
-                    if (results[j] !== null) {
-                        returnArray.push(results[j]);
+            Scene._initializeScenePoolAsync().then(function (cnt) {
+                var namePromise = Promise.all(Scene._scenePool.map(function (scene, index) {
+                    return app_1.App.get('presetname:' + index).then(function (name) {
+                        if (sceneName === name) {
+                            return Scene._scenePool[index];
+                        }
+                        else {
+                            return null;
+                        }
+                    });
+                }));
+                namePromise.then(function (results) {
+                    var returnArray = [];
+                    for (var j = 0; j < results.length; ++j) {
+                        if (results[j] !== null) {
+                            returnArray.push(results[j]);
+                        }
                     }
-                }
-                ;
-                resolve(returnArray);
+                    ;
+                    resolve(returnArray);
+                });
             });
         });
     };
     /**
      * return: Promise<Scene>
      *
-     * Get the currently active scene.
-     *
+     * Get the currently active scene. Does not work on source plugins.
      *
      * #### Usage
      *
      * ```javascript
-     * var myScene = Scene.getActiveScene();
+     * var myScene;
+     * Scene.getActiveScene().then(function(scene) {
+     *   myScene = scene;
+     * });
      * ```
      */
     Scene.getActiveScene = function () {
-        return new Promise(function (resolve) {
+        return new Promise(function (resolve, reject) {
             if (environment_1.Environment.isSourcePlugin()) {
-                app_1.App.get('presetconfig:-1').then(function (sceneString) {
-                    var curScene = json_1.JSON.parse(sceneString);
-                    if (curScene.children.length > 0) {
-                        resolve(Scene.searchSceneWithItemId(curScene.children[0]['id']));
-                    }
-                    else {
-                        throw new Error('presetconfig cannot fetch current scene');
-                    }
-                });
+                reject(Error('Not supported on source plugins'));
             }
             else {
                 app_1.App.get('preset:0').then(function (id) {
-                    resolve(Scene.getById(Number(id) + 1));
+                    return Scene.getByIdAsync(Number(id) + 1);
+                }).then(function (scene) {
+                    resolve(scene);
                 });
             }
         });
@@ -3214,7 +6745,7 @@ var Scene = (function () {
             }
             else {
                 if (scene instanceof Scene) {
-                    scene.getID().then(function (id) {
+                    scene.getId().then(function (id) {
                         app_1.App.set('preset', String(id)).then(function (res) {
                             resolve(res);
                         });
@@ -3241,153 +6772,573 @@ var Scene = (function () {
      *
      * Searches all scenes for an item by ID. ID search will return exactly 1 result (IDs are unique) or null.
      *
-     * See also: @{link #core/Item Core/Item}
+     * See also: {@link #core/Item Core/Item}
      *
      * #### Usage
      *
      * ```javascript
-     * Scene.searchAllForItemId('{10F04AE-6215-3A88-7899-950B12186359}').then(function(item) {
-     *   // item is either an Item or null
+     * Scene.searchItemsById('{10F04AE-6215-3A88-7899-950B12186359}').then(function(item) {
+     *   // result is either an Item or null
      * });
      * ```
      *
      */
-    Scene.searchAllForItemId = function (id) {
-        var isID = /^{[A-F0-9\-]*}$/i.test(id);
-        if (!isID) {
-            throw new Error('Not a valid ID format for items');
-        }
-        else {
-            Scene._initializeScenePool();
-            return new Promise(function (resolve) {
-                var match = null;
-                var found = false;
-                Scene._scenePool.forEach(function (scene, idx, arr) {
-                    if (match === null) {
-                        scene.getItems().then((function (items) {
-                            found = items.some(function (item) {
-                                if (item['_id'] === id) {
-                                    match = item;
-                                    return true;
+    Scene.searchItemsById = function (id) {
+        return new Promise(function (resolve, reject) {
+            var isID = /^{[A-F0-9\-]*}$/i.test(id);
+            if (!isID) {
+                reject(Error('Not a valid ID format for items'));
+            }
+            else {
+                Scene._initializeScenePoolAsync().then(function (cnt) {
+                    var match = null;
+                    var found = false;
+                    Scene._scenePool.forEach(function (scene, idx, arr) {
+                        if (match === null) {
+                            scene.getItems().then((function (items) {
+                                found = items.some(function (item) {
+                                    if (item['_id'] === id.toUpperCase()) {
+                                        match = item;
+                                        return true;
+                                    }
+                                    else {
+                                        return false;
+                                    }
+                                });
+                                if (found ||
+                                    Number(this) === arr.length - 1) {
+                                    resolve(match);
                                 }
-                                else {
-                                    return false;
-                                }
+                            }).bind(idx))
+                                .catch(function (err) {
+                                // Do nothing
                             });
-                            if (found ||
-                                Number(this) === arr.length - 1) {
-                                resolve(match);
-                            }
-                        }).bind(idx));
-                    }
+                        }
+                    });
                 });
-            });
-        }
+            }
+        });
     };
-    ;
     /**
      * return: Promise<Scene>
      *
      * Searches all scenes for one that contains the given item ID.
      *
-     *
      * #### Usage
      *
      * ```javascript
-     * Scene.searchSceneWithItemId('{10F04AE-6215-3A88-7899-950B12186359}').then(function(scene) {
+     * Scene.searchScenesByItemId('{10F04AE-6215-3A88-7899-950B12186359}').then(function(scene) {
      *   // scene contains the item
      * });
      * ```
      *
      */
-    Scene.searchSceneWithItemId = function (id) {
-        var isID = /^{[A-F0-9-]*}$/i.test(id);
-        if (!isID) {
-            throw new Error('Not a valid ID format for items');
-        }
-        else {
-            Scene._initializeScenePool();
-            return new Promise(function (resolve) {
-                var match = null;
-                var found = false;
-                Scene._scenePool.forEach(function (scene, idx, arr) {
-                    if (match === null) {
-                        scene.getItems().then(function (items) {
-                            found = items.some(function (item) {
-                                if (item['_id'] === id) {
-                                    match = Scene.getById(idx + 1);
-                                    return true;
+    Scene.searchScenesByItemId = function (id) {
+        return new Promise(function (resolve, reject) {
+            var isID = /^{[A-F0-9-]*}$/i.test(id);
+            if (!isID) {
+                reject(Error('Not a valid ID format for items'));
+            }
+            else {
+                Scene._initializeScenePoolAsync().then(function (cnt) {
+                    var match = null;
+                    var found = false;
+                    Scene._scenePool.forEach(function (scene, idx, arr) {
+                        if (match === null) {
+                            scene.getItems().then(function (items) {
+                                found = items.some(function (item) {
+                                    if (item['_id'] === id.toUpperCase()) {
+                                        return true;
+                                    }
+                                    else {
+                                        return false;
+                                    }
+                                });
+                                if (found) {
+                                    resolve(scene);
                                 }
-                                else {
-                                    return false;
+                                else if (idx === arr.length - 1) {
+                                    // last scene, no match
+                                    resolve(match);
                                 }
                             });
-                            if (found ||
-                                idx === arr.length - 1) {
-                                resolve(match);
-                            }
-                        });
-                    }
+                        }
+                    });
                 });
-            });
-        }
+            }
+        });
     };
     ;
     /**
-     * return: Promise<Item[]>
+     * return: Promise<Items[]>
      *
-     * Searches all scenes for an item by name substring.
-     *
+     * Searches all items for a item by name substring. This function
+     * compares against custom name first (recommended) before falling back to the
+     * name property of the item.
      *
      * #### Usage
      *
      * ```javascript
-     * Scene.searchAllForItemName('camera').then(function(items) {
+     * Scene.searchItemsByName('camera').then(function(items) {
      *   // do something to each item in items array
      * });
      * ```
      *
      */
-    Scene.searchAllForItemName = function (param) {
-        Scene._initializeScenePool();
-        var matches = [];
+    Scene.searchItemsByName = function (param) {
+        var _this = this;
         return new Promise(function (resolve) {
-            return Promise.all(Scene._scenePool.map(function (scene) {
-                return new Promise(function (resolveScene) {
-                    scene.getItems().then(function (items) {
-                        if (items.length === 0) {
-                            resolveScene();
+            _this.filterItems(function (item, filterResolve) {
+                item.getCustomName().then(function (cname) {
+                    if (cname.match(param)) {
+                        filterResolve(true);
+                    }
+                    else {
+                        return item.getName();
+                    }
+                }).then(function (name) {
+                    if (name !== undefined) {
+                        if (name.match(param)) {
+                            filterResolve(true);
                         }
                         else {
-                            return Promise.all(items.map(function (item) {
-                                return new Promise(function (resolveItem) {
-                                    item.getName().then(function (name) {
-                                        if (name.match(param)) {
-                                            matches.push(item);
-                                            return '';
-                                        }
-                                        else {
-                                            return item.getValue();
-                                        }
-                                    }).then(function (value) {
-                                        if (value.toString().match(param)) {
-                                            matches.push(item);
-                                        }
-                                        resolveItem();
-                                    });
-                                });
-                            })).then(function () {
-                                resolveScene();
-                            });
+                            return item.getValue();
                         }
-                    });
+                    }
+                }).then(function (value) {
+                    if (value !== undefined) {
+                        if (value.toString().match(param)) {
+                            filterResolve(true);
+                        }
+                        else {
+                            filterResolve(false);
+                        }
+                    }
                 });
-            })).then(function () {
-                resolve(matches);
+            }).then(function (items) {
+                resolve(items);
             });
         });
     };
     ;
+    /**
+     * param: function(item, resolve)
+     * ```
+     * return: Promise<Item[]>
+     * ```
+     *
+     * Searches all scenes for items that satisfies the provided testing function.
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * Scene.filterItems(function(item, resolve) {
+     *   // We'll only fetch Flash Items by resolving 'true' if the item is an
+     *   // instance of FlashItem
+     *   resolve((item instanceof FlashItem));
+     * }).then(function(items) {
+     *   // items would either be an empty array if no Flash items was found,
+     *   // or an array of FlashItem objects
+     * });
+     * ```
+     */
+    Scene.filterItems = function (func) {
+        return new Promise(function (resolve, reject) {
+            Scene._initializeScenePoolAsync().then(function (cnt) {
+                var matches = [];
+                if (typeof func === 'function') {
+                    return Promise.all(Scene._scenePool.map(function (scene) {
+                        return new Promise(function (resolveScene) {
+                            scene.getItems().then(function (items) {
+                                if (items.length === 0) {
+                                    resolveScene();
+                                }
+                                else {
+                                    return Promise.all(items.map(function (item) {
+                                        return new Promise(function (resolveItem) {
+                                            func(item, function (checker) {
+                                                if (checker) {
+                                                    matches.push(item);
+                                                }
+                                                resolveItem();
+                                            });
+                                        });
+                                    })).then(function () {
+                                        resolveScene();
+                                    });
+                                }
+                            }).catch(function () {
+                                resolveScene();
+                            });
+                        });
+                    })).then(function () {
+                        resolve(matches);
+                    });
+                }
+                else {
+                    reject(Error('Parameter is not a function'));
+                }
+            });
+        });
+    };
+    /**
+     * param: function(item, resolve)
+     * ```
+     * return: Promise<Scene[]>
+     * ```
+     *
+     * Searches all scenes for items that satisfies the provided testing
+     * function, and then return the scene that contains the item.
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * Scene.filterScenesByItems(function(item, resolve) {
+     *   // We'll only fetch the scenes with flash items by resolving 'true' if
+     *   // the item is an instance of FlashItem
+     *   resolve((item instanceof FlashItem));
+     * }).then(function(scenes) {
+     *   // scenes would be an array of all scenes with FlashItem
+     * });
+     * ```
+     */
+    Scene.filterScenesByItems = function (func) {
+        return new Promise(function (resolve, reject) {
+            Scene._initializeScenePoolAsync().then(function (cnt) {
+                var matches = [];
+                if (typeof func === 'function') {
+                    return Promise.all(Scene._scenePool.map(function (scene) {
+                        return new Promise(function (resolveScene) {
+                            scene.getItems().then(function (items) {
+                                if (items.length === 0) {
+                                    resolveScene();
+                                }
+                                else {
+                                    return Promise.all(items.map(function (item) {
+                                        return new Promise(function (resolveItem) {
+                                            func(item, function (checker) {
+                                                if (checker) {
+                                                    matches.push(scene);
+                                                }
+                                                resolveItem();
+                                            });
+                                        });
+                                    })).then(function () {
+                                        resolveScene();
+                                    });
+                                }
+                            });
+                        });
+                    })).then(function () {
+                        resolve(matches);
+                    });
+                }
+                else {
+                    reject(Error('Parameter is not a function'));
+                }
+            });
+        });
+    };
+    /**
+     * > #### For Deprecation
+     * This method is deprecated and will be removed soon.
+     * Please use {@link #core/Scene#searchItemsById searchItemsById} instead.
+     *
+     * ```
+     * return: Promise<Source>
+     * ```
+     *
+     * Searches all scenes for an source by ID. ID search will return exactly 1 result (IDs are unique) or null.
+     *
+     * See also: {@link #core/Source Core/Source}
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * Scene.searchSourcesById('{10F04AE-6215-3A88-7899-950B12186359}').then(function(source) {
+     *   // result is either a Source or null
+     * });
+     * ```
+     *
+     */
+    Scene.searchSourcesById = function (id) {
+        return new Promise(function (resolve, reject) {
+            var isID = /^{[A-F0-9\-]*}$/i.test(id);
+            if (!isID) {
+                reject(Error('Not a valid ID format for sources'));
+            }
+            else {
+                Scene._initializeScenePoolAsync().then(function (cnt) {
+                    var match = null;
+                    var found = false;
+                    Scene._scenePool.forEach(function (scene, idx, arr) {
+                        if (match === null) {
+                            scene.getSources().then((function (items) {
+                                found = items.some(function (item) {
+                                    if (item['_id'] === id.toUpperCase()) {
+                                        match = item;
+                                        return true;
+                                    }
+                                    else {
+                                        return false;
+                                    }
+                                });
+                                if (found ||
+                                    Number(this) === arr.length - 1) {
+                                    resolve(match);
+                                }
+                            }).bind(idx))
+                                .catch(function (err) {
+                                // Do nothing
+                            });
+                        }
+                    });
+                });
+            }
+        });
+    };
+    ;
+    /**
+     * > #### For Deprecation
+     * This method is deprecated and will be removed soon.
+     * Please use {@link #core/Scene#searchScenesByItemId searchScenesByItemId} instead.
+     *
+     * ```
+     * return: Promise<Scene>
+     * ```
+     *
+     * Searches all scenes for one that contains the given source ID.
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * Scene.searchScenesBySourceId('{10F04AE-6215-3A88-7899-950B12186359}').then(function(scene) {
+     *   // scene contains the source
+     * });
+     * ```
+     *
+     */
+    Scene.searchScenesBySourceId = function (id) {
+        return new Promise(function (resolve, reject) {
+            var isID = /^{[A-F0-9-]*}$/i.test(id);
+            if (!isID) {
+                reject(Error('Not a valid ID format for sources'));
+            }
+            else {
+                Scene._initializeScenePoolAsync().then(function (cnt) {
+                    var match = null;
+                    var found = false;
+                    Scene._scenePool.forEach(function (scene, idx, arr) {
+                        if (match === null) {
+                            scene.getSources().then(function (sources) {
+                                found = sources.some(function (source) {
+                                    if (source['_id'] === id.toUpperCase()) {
+                                        return true;
+                                    }
+                                    else {
+                                        return false;
+                                    }
+                                });
+                                if (found) {
+                                    resolve(scene);
+                                }
+                                else if (idx === arr.length - 1) {
+                                    // last scene, no match
+                                    resolve(match);
+                                }
+                            });
+                        }
+                    });
+                });
+            }
+        });
+    };
+    ;
+    /**
+     * > #### For Deprecation
+     * This method is deprecated and will be removed soon.
+     * Please use {@link #core/Scene#searchItemsByName searchItemsByName} instead.
+     *
+     * ```
+     * return: Promise<Source[]>
+     * ```
+     *
+     * Searches all scenes for a source by name substring. This function
+     * compares against custom name first (recommended) before falling back to the
+     * name property of the source.
+     *
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * Scene.searchSourcesByName('camera').then(function(sources) {
+     *   // do something to each source in sources array
+     * });
+     * ```
+     *
+     */
+    Scene.searchSourcesByName = function (param) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            _this.filterSources(function (source, filterResolve) {
+                source.getCustomName().then(function (cname) {
+                    if (cname.match(param)) {
+                        filterResolve(true);
+                    }
+                    else {
+                        return source.getName();
+                    }
+                }).then(function (name) {
+                    if (name !== undefined) {
+                        if (name.match(param)) {
+                            filterResolve(true);
+                        }
+                        else {
+                            return source.getValue();
+                        }
+                    }
+                }).then(function (value) {
+                    if (value !== undefined) {
+                        if (value.toString().match(param)) {
+                            filterResolve(true);
+                        }
+                        else {
+                            filterResolve(false);
+                        }
+                    }
+                });
+            }).then(function (sources) {
+                resolve(sources);
+            });
+        });
+    };
+    ;
+    /**
+     * > #### For Deprecation
+     * This method is deprecated and will be removed soon.
+     * Please use {@link #core/Scene#filterItems filterItems} instead.
+     *
+     * ```
+     * param: function(source, resolve)
+     * return: Promise<Source[]>
+     * ```
+     *
+     * Searches all scenes for sources that satisfies the provided testing function.
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * Scene.filterSources(function(source, resolve) {
+     *   // We'll only fetch Flash Sources by resolving 'true' if the source is an
+     *   // instance of FlashSource
+     *   resolve((source instanceof FlashSource));
+     * }).then(function(sources) {
+     *   // sources would either be an empty array if no Flash sources was found,
+     *   // or an array of FlashSource objects
+     * });
+     * ```
+     */
+    Scene.filterSources = function (func) {
+        return new Promise(function (resolve, reject) {
+            Scene._initializeScenePoolAsync().then(function (cnt) {
+                var matches = [];
+                if (typeof func === 'function') {
+                    return Promise.all(Scene._scenePool.map(function (scene) {
+                        return new Promise(function (resolveScene) {
+                            scene.getSources().then(function (sources) {
+                                if (sources.length === 0) {
+                                    resolveScene();
+                                }
+                                else {
+                                    return Promise.all(sources.map(function (source) {
+                                        return new Promise(function (resolveSource) {
+                                            func(source, function (checker) {
+                                                if (checker) {
+                                                    matches.push(source);
+                                                }
+                                                resolveSource();
+                                            });
+                                        });
+                                    })).then(function () {
+                                        resolveScene();
+                                    });
+                                }
+                            }).catch(function () {
+                                resolveScene();
+                            });
+                        });
+                    })).then(function () {
+                        resolve(matches);
+                    });
+                }
+                else {
+                    reject(Error('Parameter is not a function'));
+                }
+            });
+        });
+    };
+    /**
+     * > #### For Deprecation
+     * This method is deprecated and will be removed soon.
+     * Please use {@link #core/Scene#filterScenesByItems filterScenesByItems} instead.
+     *
+     * ```
+     * param: function(source, resolve)
+     * return: Promise<Scene[]>
+     * ```
+     *
+     * Searches all scenes for sources that satisfies the provided testing
+     * function, and then return the scene that contains the source.
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * Scene.filterScenesBySources(function(source, resolve) {
+     *   // We'll only fetch the scenes with flash sources by resolving 'true' if
+     *   // the source is an instance of FlashSource
+     *   resolve((source instanceof FlashSource));
+     * }).then(function(scenes) {
+     *   // scenes would be an array of all scenes with FlashSources
+     * });
+     * ```
+     */
+    Scene.filterScenesBySources = function (func) {
+        return new Promise(function (resolve, reject) {
+            Scene._initializeScenePoolAsync().then(function (cnt) {
+                var matches = [];
+                if (typeof func === 'function') {
+                    return Promise.all(Scene._scenePool.map(function (scene) {
+                        return new Promise(function (resolveScene) {
+                            scene.getSources().then(function (sources) {
+                                if (sources.length === 0) {
+                                    resolveScene();
+                                }
+                                else {
+                                    return Promise.all(sources.map(function (source) {
+                                        return new Promise(function (resolveSource) {
+                                            func(source, function (checker) {
+                                                if (checker) {
+                                                    matches.push(scene);
+                                                }
+                                                resolveSource();
+                                            });
+                                        });
+                                    })).then(function () {
+                                        resolveScene();
+                                    });
+                                }
+                            });
+                        });
+                    })).then(function () {
+                        resolve(matches);
+                    });
+                }
+                else {
+                    reject(Error('Parameter is not a function'));
+                }
+            });
+        });
+    };
     /**
      * return: Promise<boolean>
   
@@ -3444,7 +7395,12 @@ var Scene = (function () {
     Scene.prototype.getSceneNumber = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            resolve(_this._id + 1);
+            if (typeof _this._id === 'number') {
+                resolve(Number(_this._id) + 1);
+            }
+            else {
+                resolve(_this._id);
+            }
         });
     };
     /**
@@ -3493,55 +7449,162 @@ var Scene = (function () {
         });
     };
     /**
-     * return: Promise<Item[]>
+     * > #### For Deprecation
+     * This method is deprecated and will be removed soon.
+     * Please use {@link #core/Scene#getItems getItems} instead.
      *
-     * Gets all the items (sources) in a specific scene.
-     * See also: @{link #core/Item Core/Item}
+     * ```
+     * return: Promise<Source[]>
+     * ```
+     *
+     * Gets all the sources in a specific scene.
+     * See also: {@link #core/Source Core/Source}
      *
      * #### Usage
      *
      * ```javascript
-     * myScene.getItems().then(function(items) {
-     *  // do something to each item in items array
+     * myScene.getSources().then(function(sources) {
+     *  // do something to each source in sources array
      * });
      * ```
      */
-    Scene.prototype.getItems = function () {
+    Scene.prototype.getSources = function () {
         var _this = this;
-        return new Promise(function (resolve) {
+        return new Promise(function (resolve, reject) {
+            console.warn('Warning! getSources is deprecated and will be ' +
+                'removed soon. Please use getItems instead.');
             app_1.App.getAsList('presetconfig:' + _this._id).then(function (jsonArr) {
                 var promiseArray = [];
-                // type checking to return correct Item subtype
+                // type checking to return correct Source subtype
                 var typePromise = function (index) { return new Promise(function (typeResolve) {
-                    var item = jsonArr[index];
-                    var type = Number(item['type']);
+                    var source = jsonArr[index];
+                    var type = Number(source['type']);
                     if (type === item_1.ItemTypes.GAMESOURCE) {
-                        typeResolve(new game_1.GameItem(item));
+                        typeResolve(new game_1.GameSource(source));
+                    }
+                    else if ((type === item_1.ItemTypes.HTML || type === item_1.ItemTypes.FILE) &&
+                        source['name'].indexOf('Video Playlist') === 0 &&
+                        source['FilePlaylist'] !== '') {
+                        typeResolve(new videoplaylist_1.VideoPlaylistSource(source));
                     }
                     else if (type === item_1.ItemTypes.HTML) {
-                        typeResolve(new html_1.HTMLItem(item));
+                        typeResolve(new html_1.HtmlSource(source));
                     }
-                    else if (Number(jsonArr[index]['type']) === item_1.ItemTypes.LIVE &&
-                        jsonArr[index]['item'].indexOf('{33D9A762-90C8-11D0-BD43-00A0C911CE86}') === -1) {
-                        typeResolve(new camera_1.CameraItem(jsonArr[index]));
+                    else if (type === item_1.ItemTypes.SCREEN) {
+                        typeResolve(new screen_1.ScreenSource(source));
                     }
-                    else if (Number(jsonArr[index]['type']) === item_1.ItemTypes.LIVE &&
-                        jsonArr[index]['item'].indexOf('{33D9A762-90C8-11D0-BD43-00A0C911CE86}') !== -1) {
-                        typeResolve(new audio_1.AudioItem(jsonArr[index]));
+                    else if (type === item_1.ItemTypes.BITMAP ||
+                        type === item_1.ItemTypes.FILE &&
+                            /\.gif$/.test(source['item'])) {
+                        typeResolve(new image_1.ImageSource(source));
+                    }
+                    else if (type === item_1.ItemTypes.FILE &&
+                        /\.(gif|xbs)$/.test(source['item']) === false &&
+                        /^(rtsp|rtmp):\/\//.test(source['item']) === false) {
+                        typeResolve(new media_1.MediaSource(source));
+                    }
+                    else if (Number(source['type']) === item_1.ItemTypes.LIVE &&
+                        source['item'].indexOf('{33D9A762-90C8-11D0-BD43-00A0C911CE86}') === -1) {
+                        typeResolve(new camera_1.CameraSource(source));
+                    }
+                    else if (Number(source['type']) === item_1.ItemTypes.LIVE &&
+                        source['item'].indexOf('{33D9A762-90C8-11D0-BD43-00A0C911CE86}') !== -1) {
+                        typeResolve(new audio_1.AudioSource(source));
+                    }
+                    else if (Number(source['type']) === item_1.ItemTypes.FLASHFILE) {
+                        typeResolve(new flash_1.FlashSource(source));
                     }
                     else {
-                        typeResolve(new item_1.Item(jsonArr[index]));
+                        typeResolve(new source_1.Source(source));
                     }
                 }); };
                 if (Array.isArray(jsonArr)) {
                     for (var i = 0; i < jsonArr.length; i++) {
-                        jsonArr[i]['sceneID'] = _this._id;
+                        jsonArr[i]['sceneId'] = _this._id;
                         promiseArray.push(typePromise(i));
                     }
                 }
                 Promise.all(promiseArray).then(function (results) {
                     resolve(results);
                 });
+            }).catch(function (err) {
+                reject(err);
+            });
+        });
+    };
+    /**
+     * return: Promise<Item[]>
+     *
+     * Gets all the sources in a specific scene.
+     * See also: {@link #core/Source Core/Source}
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * myScene.getItems().then(function(items) {
+     *  // do something to each source in items array
+     * });
+     * ```
+     */
+    Scene.prototype.getItems = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            app_1.App.getAsList('presetconfig:' + _this._id).then(function (jsonArr) {
+                var promiseArray = [];
+                // type checking to return correct Source subtype
+                var typePromise = function (index) { return new Promise(function (typeResolve) {
+                    var item = jsonArr[index];
+                    var type = Number(item['type']);
+                    if (type === item_1.ItemTypes.GAMESOURCE) {
+                        typeResolve(new game_2.GameItem(item));
+                    }
+                    else if ((type === item_1.ItemTypes.HTML || type === item_1.ItemTypes.FILE) &&
+                        item['name'].indexOf('Video Playlist') === 0 &&
+                        item['FilePlaylist'] !== '') {
+                        typeResolve(new videoplaylist_2.VideoPlaylistItem(item));
+                    }
+                    else if (type === item_1.ItemTypes.HTML) {
+                        typeResolve(new html_2.HtmlItem(item));
+                    }
+                    else if (type === item_1.ItemTypes.SCREEN) {
+                        typeResolve(new screen_2.ScreenItem(item));
+                    }
+                    else if (type === item_1.ItemTypes.BITMAP ||
+                        type === item_1.ItemTypes.FILE &&
+                            /\.gif$/.test(item['item'])) {
+                        typeResolve(new image_2.ImageItem(item));
+                    }
+                    else if (type === item_1.ItemTypes.FILE &&
+                        /\.(gif|xbs)$/.test(item['item']) === false &&
+                        /^(rtsp|rtmp):\/\//.test(item['item']) === false) {
+                        typeResolve(new media_2.MediaItem(item));
+                    }
+                    else if (Number(item['type']) === item_1.ItemTypes.LIVE &&
+                        item['item'].indexOf('{33D9A762-90C8-11D0-BD43-00A0C911CE86}') === -1) {
+                        typeResolve(new camera_2.CameraItem(item));
+                    }
+                    else if (Number(item['type']) === item_1.ItemTypes.LIVE &&
+                        item['item'].indexOf('{33D9A762-90C8-11D0-BD43-00A0C911CE86}') !== -1) {
+                        typeResolve(new audio_2.AudioItem(item));
+                    }
+                    else if (Number(item['type']) === item_1.ItemTypes.FLASHFILE) {
+                        typeResolve(new flash_2.FlashItem(item));
+                    }
+                    else {
+                        typeResolve(new item_1.Item(item));
+                    }
+                }); };
+                if (Array.isArray(jsonArr)) {
+                    for (var i = 0; i < jsonArr.length; i++) {
+                        jsonArr[i]['sceneId'] = _this._id;
+                        promiseArray.push(typePromise(i));
+                    }
+                }
+                Promise.all(promiseArray).then(function (results) {
+                    resolve(results);
+                });
+            }).catch(function (err) {
+                reject(err);
             });
         });
     };
@@ -3567,31 +7630,31 @@ var Scene = (function () {
         });
     };
     /**
-     * param: Array<Item> | Array<string> (item IDs)
+     * param: Array<Source> | Array<string> (source IDs)
      * ```
      * return: Promise<Scene>
      * ```
      *
-     * Sets the item order of the current scene. The first item in the array will
-     * be on top (will cover items below it).
+     * Sets the source order of the current scene. The first source in the array
+     * will be on top (will cover sources below it).
      */
-    Scene.prototype.setItemOrder = function (items) {
+    Scene.prototype.setSourceOrder = function (sources) {
         var _this = this;
         return new Promise(function (resolve, reject) {
             if (environment_1.Environment.isSourcePlugin()) {
                 reject(Error('not available for source plugins'));
             }
             else {
-                items.reverse();
+                sources.reverse();
                 var ids = [];
                 Scene.getActiveScene().then(function (scene) {
-                    if (items.every(function (el) { return el instanceof item_1.Item; })) {
+                    if (sources.every(function (el) { return el instanceof source_1.Source; })) {
                         return new Promise(function (resolve) {
                             var promises = [];
-                            for (var i in items) {
+                            for (var i in sources) {
                                 promises.push((function (_i) {
                                     return new Promise(function (resolve) {
-                                        items[_i].getID().then(function (id) {
+                                        sources[_i].getId().then(function (id) {
                                             ids[_i] = id;
                                             resolve(_this);
                                         });
@@ -3606,7 +7669,7 @@ var Scene = (function () {
                         });
                     }
                     else {
-                        ids = items;
+                        ids = sources;
                         return scene.getSceneNumber();
                     }
                 }).then(function (id) {
@@ -3640,7 +7703,7 @@ var Scene = (function () {
                                 });
                             }
                             else {
-                                reject(Error('Scene does not have any items'));
+                                reject(Error('Scene does not have any source'));
                             }
                         });
                     }
@@ -3653,7 +7716,237 @@ var Scene = (function () {
     return Scene;
 })();
 exports.Scene = Scene;
-},{"../internal/app":17,"../internal/internal":20,"../internal/util/json":22,"../internal/util/xml":24,"./environment":3,"./item/audio":4,"./item/camera":5,"./item/game":6,"./item/html":7,"./item/item":13}],16:[function(require,module,exports){
+},{"../internal/app":37,"../internal/internal":40,"../internal/util/json":42,"../internal/util/xml":45,"./environment":4,"./items/audio":6,"./items/camera":7,"./items/flash":9,"./items/game":10,"./items/html":11,"./items/image":18,"./items/item":20,"./items/media":22,"./items/screen":23,"./items/videoplaylist":24,"./source/audio":26,"./source/camera":27,"./source/flash":28,"./source/game":29,"./source/html":30,"./source/image":31,"./source/media":32,"./source/screen":33,"./source/source":34,"./source/videoplaylist":35}],26:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
+var audio_1 = require('../items/audio');
+/**
+ * > #### For Deprecation
+ * This Class is deprecated and will be removed soon. Please use
+ * {@link #core/AudioItem AudioItem} instead. This Class shares the same methods
+ * with AudioItem.
+ */
+var AudioSource = (function (_super) {
+    __extends(AudioSource, _super);
+    function AudioSource() {
+        _super.apply(this, arguments);
+    }
+    return AudioSource;
+})(audio_1.AudioItem);
+exports.AudioSource = AudioSource;
+},{"../items/audio":6}],27:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
+var camera_1 = require('../items/camera');
+/**
+ * > #### For Deprecation
+ * This Class is deprecated and will be removed soon. Please use
+ * {@link #core/CameraItem CameraItem} instead. This Class shares the same
+ * methods with CameraItem.
+ */
+var CameraSource = (function (_super) {
+    __extends(CameraSource, _super);
+    function CameraSource() {
+        _super.apply(this, arguments);
+    }
+    return CameraSource;
+})(camera_1.CameraItem);
+exports.CameraSource = CameraSource;
+},{"../items/camera":7}],28:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
+var flash_1 = require('../items/flash');
+/**
+ * > #### For Deprecation
+ * This Class is deprecated and will be removed soon. Please use
+ * {@link #core/FlashItem FlashItem} instead. This Class shares the same
+ * methods with FlashItem.
+ */
+var FlashSource = (function (_super) {
+    __extends(FlashSource, _super);
+    function FlashSource() {
+        _super.apply(this, arguments);
+    }
+    return FlashSource;
+})(flash_1.FlashItem);
+exports.FlashSource = FlashSource;
+},{"../items/flash":9}],29:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
+var game_1 = require('../items/game');
+/**
+ * > #### For Deprecation
+ * This Class is deprecated and will be removed soon. Please use
+ * {@link #core/GameItem GameItem} instead. This Class shares the same methods
+ * with GameItem.
+ */
+var GameSource = (function (_super) {
+    __extends(GameSource, _super);
+    function GameSource() {
+        _super.apply(this, arguments);
+    }
+    return GameSource;
+})(game_1.GameItem);
+exports.GameSource = GameSource;
+},{"../items/game":10}],30:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
+var html_1 = require('../items/html');
+/**
+ * > #### For Deprecation
+ * This Class is deprecated and will be removed soon. Please use
+ * {@link #core/HtmlItem HtmlItem} instead. This Class shares the same
+ * methods with HtmlItem.
+ */
+var HtmlSource = (function (_super) {
+    __extends(HtmlSource, _super);
+    function HtmlSource() {
+        _super.apply(this, arguments);
+    }
+    return HtmlSource;
+})(html_1.HtmlItem);
+exports.HtmlSource = HtmlSource;
+},{"../items/html":11}],31:[function(require,module,exports){
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
+var image_1 = require('../items/image');
+/**
+ * > #### For Deprecation
+ * This Class is deprecated and will be removed soon. Please use
+ * {@link #core/ImageItem ImageItem} instead. This Class shares the same
+ * methods with ImageItem.
+ */
+var ImageSource = (function (_super) {
+    __extends(ImageSource, _super);
+    function ImageSource() {
+        _super.apply(this, arguments);
+    }
+    return ImageSource;
+})(image_1.ImageItem);
+exports.ImageSource = ImageSource;
+},{"../items/image":18}],32:[function(require,module,exports){
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
+var media_1 = require('../items/media');
+/**
+ * > #### For Deprecation
+ * This Class is deprecated and will be removed soon. Please use
+ * {@link #core/MediaItem MediaItem} instead. This Class shares the same
+ * methods with MediaItem.
+ */
+var MediaSource = (function (_super) {
+    __extends(MediaSource, _super);
+    function MediaSource() {
+        _super.apply(this, arguments);
+    }
+    return MediaSource;
+})(media_1.MediaItem);
+exports.MediaSource = MediaSource;
+},{"../items/media":22}],33:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
+var screen_1 = require('../items/screen');
+/**
+ * > #### For Deprecation
+ * This Class is deprecated and will be removed soon. Please use
+ * {@link #core/ScreenItem ScreenItem} instead. This Class shares the same
+ * methods with ScreenItem.
+ */
+var ScreenSource = (function (_super) {
+    __extends(ScreenSource, _super);
+    function ScreenSource() {
+        _super.apply(this, arguments);
+    }
+    return ScreenSource;
+})(screen_1.ScreenItem);
+exports.ScreenSource = ScreenSource;
+},{"../items/screen":23}],34:[function(require,module,exports){
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var item_1 = require('../items/item');
+/**
+ * > #### For Deprecation
+ * This Class is deprecated and will be removed soon. Please use
+ * {@link #core/Item Item} instead. This Class shares the same
+ * methods with Item.
+ */
+var Source = (function (_super) {
+    __extends(Source, _super);
+    function Source() {
+        _super.apply(this, arguments);
+    }
+    return Source;
+})(item_1.Item);
+exports.Source = Source;
+},{"../items/item":20}],35:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
+var videoplaylist_1 = require('../items/videoplaylist');
+/**
+ * > #### For Deprecation
+ * This Class is deprecated and will be removed soon. Please use
+ * {@link #core/VideoPlaylistItem VideoPlaylistItem} instead. This Class shares
+ * the same methods with VideoPlaylistItem.
+ */
+var VideoPlaylistSource = (function (_super) {
+    __extends(VideoPlaylistSource, _super);
+    function VideoPlaylistSource() {
+        _super.apply(this, arguments);
+    }
+    return VideoPlaylistSource;
+})(videoplaylist_1.VideoPlaylistItem);
+exports.VideoPlaylistSource = VideoPlaylistSource;
+},{"../items/videoplaylist":24}],36:[function(require,module,exports){
+/// <reference path="../../defs/es6-promise.d.ts" />
+var app_1 = require('../internal/app');
 /**
  * The Transition class represents a preset transition within XSplit Broadcaster.
  * This may be used to set the application's transition scheme when switching scenes,
@@ -3661,15 +7954,49 @@ exports.Scene = Scene;
  *
  * Simply use one of the available Transition objects such as Transition.FAN or
  * Transition.COLLAPSE as the parameter to the `setTransition()` method of an
- * App instance, or a valid Item instance that supports transitions (this
- * includes {@link #core/CameraItem Core/CameraItem},
- * {@link #core/GameItem Core/GameItem}, and
- * {@link #core/HTMLItem Core/HTMLItem}.)
+ * App instance, or a valid Source instance that supports transitions (this
+ * includes {@link #core/CameraSource Core/CameraSource},
+ * {@link #core/CameraSource Core/FlashSource},
+ * {@link #core/CameraSource Core/GameSource},
+ * {@link #core/GameSource Core/HtmlSource},
+ * {@link #core/CameraSource Core/ImageSource},
+ * {@link #core/GameSource Core/MediaSource}, and
+ * {@link #core/HtmlSource Core/ScreenSource}.)
+ *
+ * For scene transitions, you can also use custom stinger transitions,
+ * which are exposed through the static method Transition.getSceneTransitions
  */
 var Transition = (function () {
-    function Transition(key) {
-        this._key = key; // retain key so that NONE is readable
-        this._value = Transition._transitionMap[key];
+    function Transition(key, setValue) {
+        if (setValue === void 0) { setValue = null; }
+        var value = Transition._transitionMap[key];
+        if (typeof value !== 'undefined') {
+            this._key = key; // retain key so that NONE is readable
+            this._value = value;
+        }
+        else if (key.substring(0, 8) === 'stinger:') {
+            if (typeof setValue !== 'undefined' && setValue !== null) {
+                this._key = setValue;
+            }
+            else {
+                var fileName = key.split(',')[0].split('\\').pop().split('/').pop();
+                var m = fileName.lastIndexOf('.webm');
+                if (m >= 0 && m + fileName.length >= fileName.length) {
+                    fileName = fileName.substring(0, m);
+                }
+                var n = fileName.lastIndexOf('_');
+                if (n >= 0 && n + fileName.length >= fileName.length) {
+                    fileName = fileName.substring(0, n) + ': ' +
+                        fileName.substring(n + 1) + 'ms';
+                }
+                this._key = fileName;
+            }
+            this._value = key;
+        }
+        else {
+            this._key = key; // retain key so that NONE is readable
+            this._value = key.toLowerCase();
+        }
     }
     /**
      * Converts this transition object to the underlying string representation to be read by XSplit Broadcaster.
@@ -3682,6 +8009,50 @@ var Transition = (function () {
      */
     Transition.prototype.toTransitionKey = function () {
         return this._key;
+    };
+    /**
+     * return: Promise<Transition[]>
+     *
+     * Get all available transitions for use in scene change
+     *
+     * ** MINIMUM XBC REQUIREMENT **
+     * requires XBC v.2.7.1602.0502 and above
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * Transtition.getSceneTransitions().then(function(transitions) {
+     *   for (var i = 0; i < transitions.length; i++) {
+     *     transitions.toString(); // Returns the value of the transition
+     *     transitions.toTransitionKey(); // Returns the key of the transition
+     *   }
+     * })
+     * ```
+     */
+    Transition.getSceneTransitions = function () {
+        return new Promise(function (resolve) {
+            var transitions = [];
+            var transitionString = app_1.App.getGlobalProperty('transitions');
+            try {
+                if (transitionString !== '') {
+                    var transitionArray = JSON.parse(transitionString);
+                    for (var i = transitionArray.length - 1; i >= 0; i--) {
+                        var transitionObject = transitionArray[i];
+                        if (transitionObject.hasOwnProperty('Id') &&
+                            transitionObject.hasOwnProperty('Name')) {
+                            transitions.push(new Transition(transitionObject['Id'], transitionObject['Name']));
+                        }
+                    }
+                    resolve(transitions);
+                }
+                else {
+                    resolve(transitions);
+                }
+            }
+            catch (e) {
+                throw new Error('Error retrieving available transitions');
+            }
+        });
     };
     Transition._transitionMap = {
         NONE: '',
@@ -3714,7 +8085,7 @@ var Transition = (function () {
     return Transition;
 })();
 exports.Transition = Transition;
-},{}],17:[function(require,module,exports){
+},{"../internal/app":37}],37:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var internal_1 = require('./internal');
 var json_1 = require('./util/json');
@@ -3739,13 +8110,18 @@ var App = (function () {
     };
     /** Gets the value of the given property as list */
     App.getAsList = function (name) {
-        return new Promise(function (resolve) {
+        return new Promise(function (resolve, reject) {
             App.get(name).then(function (xml) {
-                var propsJSON = json_1.JSON.parse(xml), propsArr = [];
-                if (propsJSON.children && propsJSON.children.length > 0) {
-                    propsArr = propsJSON.children;
+                try {
+                    var propsJSON = json_1.JSON.parse(xml), propsArr = [];
+                    if (propsJSON.children && propsJSON.children.length > 0) {
+                        propsArr = propsJSON.children;
+                    }
+                    resolve(propsArr);
                 }
-                resolve(propsArr);
+                catch (e) {
+                    reject(e);
+                }
             });
         });
     };
@@ -3789,7 +8165,7 @@ var App = (function () {
     return App;
 })();
 exports.App = App;
-},{"./internal":20,"./util/json":22}],18:[function(require,module,exports){
+},{"./internal":40,"./util/json":42}],38:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var Global = (function () {
     function Global() {
@@ -3811,13 +8187,14 @@ var Global = (function () {
     return Global;
 })();
 exports.Global = Global;
-},{}],19:[function(require,module,exports){
+},{}],39:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var environment_1 = require('../core/environment');
 var item_1 = require('./item');
 var internal_1 = require('./internal');
 var global_1 = require('./global');
 var config_1 = require('../window/config');
+var version_1 = require('./util/version');
 function resolveRelativePath(path, base) {
     // ABSOLUTE PATHS
     if (path.substring(0, 7) === 'http://' ||
@@ -3855,42 +8232,55 @@ function readMetaConfigUrl() {
         if (environment_1.Environment.isSourcePlugin()) {
             var configObj = {};
             // initialize config URL if necessary
-            try {
-                var config = internal_1.exec('GetConfiguration');
-                configObj = JSON.parse(config);
-            }
-            catch (e) {
-            }
-            finally {
-                var metas = document.getElementsByTagName('meta');
-                for (var i = metas.length - 1; i >= 0; i--) {
-                    if (metas[i].name === 'xsplit:config-url') {
-                        var url = resolveRelativePath(metas[i].content, window.location.href);
-                        configObj['configUrl'] = url;
-                        var persist = {
-                            configUrl: url
-                        };
-                        global_1.Global.setPersistentConfig(persist);
-                        break;
+            var promise = new Promise(function (resolveInner) {
+                internal_1.exec('GetLocalPropertyAsync', 'prop:BrowserConfiguration', function (result) {
+                    resolveInner(result);
+                });
+            });
+            promise.then(function (browserConfig) {
+                try {
+                    if (browserConfig === '' || browserConfig === 'null') {
+                        browserConfig = internal_1.exec('GetConfiguration');
                     }
+                    configObj = JSON.parse(browserConfig);
                 }
-                internal_1.exec('SetBrowserProperty', 'Configuration', JSON.stringify(configObj));
-                resolve();
-            }
+                catch (e) {
+                }
+                finally {
+                    var metas = document.getElementsByTagName('meta');
+                    for (var i = metas.length - 1; i >= 0; i--) {
+                        if (metas[i].name === 'xsplit:config-url') {
+                            var url = resolveRelativePath(metas[i].content, window.location.href);
+                            configObj['configUrl'] = url;
+                            var persist = {
+                                configUrl: url
+                            };
+                            global_1.Global.setPersistentConfig(persist);
+                            break;
+                        }
+                    }
+                    internal_1.exec('SetBrowserProperty', 'Configuration', JSON.stringify(configObj));
+                    resolve();
+                }
+            });
         }
         else {
             resolve();
         }
     });
 }
-function getCurrentSourceID() {
+function getCurrentSourceId() {
     return new Promise(function (resolve) {
-        if (environment_1.Environment.isSourcePlugin() || environment_1.Environment.isSourceConfig()) {
+        if (environment_1.Environment.isSourceConfig() ||
+            (environment_1.Environment.isSourcePlugin() &&
+                version_1.versionCompare(version_1.getVersion())
+                    .is
+                    .lessThan(version_1.minVersion))) {
             // initialize Item.getSource() functions
             internal_1.exec('GetLocalPropertyAsync', 'prop:id', function (result) {
-                var id = decodeURIComponent(result);
-                item_1.Item.setBaseID(id);
-                if (environment_1.Environment.isSourcePlugin()) {
+                var id = result;
+                item_1.Item.setBaseId(id);
+                if (environment_1.Environment.isSourcePlugin() || environment_1.Environment.isSourceConfig()) {
                     item_1.Item.lockSourceSlot(id);
                 }
                 resolve();
@@ -3905,7 +8295,7 @@ function informWhenConfigLoaded() {
     return new Promise(function (resolve) {
         if (environment_1.Environment.isSourceConfig()) {
             window.addEventListener('load', function () {
-                config_1.SourceConfigWindow.getInstance().emit('config-load');
+                config_1.SourcePropsWindow.getInstance().emit('config-load');
                 resolve();
             });
         }
@@ -3916,7 +8306,7 @@ function informWhenConfigLoaded() {
 }
 function init() {
     global_1.Global.addInitializationPromise(readMetaConfigUrl());
-    global_1.Global.addInitializationPromise(getCurrentSourceID());
+    global_1.Global.addInitializationPromise(getCurrentSourceId());
     global_1.Global.addInitializationPromise(informWhenConfigLoaded());
     Promise.all(global_1.Global.getInitializationPromises()).then(function () {
         document.dispatchEvent(new CustomEvent('xsplit-js-ready', {
@@ -3925,7 +8315,7 @@ function init() {
     });
 }
 init();
-},{"../core/environment":3,"../window/config":35,"./global":18,"./internal":20,"./item":21}],20:[function(require,module,exports){
+},{"../core/environment":4,"../window/config":60,"./global":38,"./internal":40,"./item":41,"./util/version":44}],40:[function(require,module,exports){
 /// <reference path="../../defs/window.d.ts" />
 exports.DEBUG = false;
 var _callbacks = {};
@@ -3970,10 +8360,11 @@ window.OnAsyncCallback = function (asyncID, result) {
         callback.call(this, decodeURIComponent(result));
     }
 };
-},{}],21:[function(require,module,exports){
+},{}],41:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var internal_1 = require('./internal');
 var environment_1 = require('../core/environment');
+var version_1 = require('./util/version');
 var Item = (function () {
     function Item() {
     }
@@ -3987,13 +8378,21 @@ var Item = (function () {
             }
             Item.lastSlot = slot;
             Item.itemSlotMap[slot] = itemID;
-            if (environment_1.Environment.isExtension()) {
+            if (!environment_1.Environment.isSourcePlugin()) {
                 internal_1.exec('SearchVideoItem' +
                     (String(slot) === '0' ? '' : (slot + 1)), itemID);
             }
             else {
-                internal_1.exec('AttachVideoItem' +
-                    (String(slot) === '0' ? '' : (slot + 1)), itemID);
+                var hasGlobalSources = version_1.versionCompare(version_1.getVersion())
+                    .is
+                    .greaterThan(version_1.minVersion);
+                if (hasGlobalSources) {
+                    internal_1.exec('AttachVideoItem' + (slot + 1), itemID);
+                }
+                else {
+                    internal_1.exec('AttachVideoItem' +
+                        (String(slot) === '0' ? '' : (slot + 1)), itemID);
+                }
             }
         }
         return slot;
@@ -4010,35 +8409,49 @@ var Item = (function () {
         }
     };
     /** Get an item's local property asynchronously */
-    Item.get = function (name, slot) {
-        if (slot === void 0) { slot = 0; }
+    Item.get = function (name, id) {
         return new Promise(function (resolve) {
+            var slot = id !== undefined && id !== null ? Item.attach(id) : -1;
+            var hasGlobalSources = version_1.versionCompare(version_1.getVersion())
+                .is
+                .greaterThan(version_1.minVersion);
+            if ((!environment_1.Environment.isSourcePlugin() && String(slot) === '0') ||
+                (environment_1.Environment.isSourcePlugin() &&
+                    String(slot) === '0' &&
+                    !hasGlobalSources)) {
+                slot = -1;
+            }
             internal_1.exec('GetLocalPropertyAsync' +
-                (String(slot) === '0' ? '' : slot + 1), name, function (val) {
+                (String(slot) === '-1' ? '' : slot + 1), name, function (val) {
                 resolve(val);
             });
         });
     };
     /** Sets an item's local property */
-    Item.set = function (name, value, slot) {
-        if (slot === void 0) { slot = 0; }
+    Item.set = function (name, value, id) {
         return new Promise(function (resolve) {
+            var slot = id !== undefined && id !== null ? Item.attach(id) : -1;
+            var hasGlobalSources = version_1.versionCompare(version_1.getVersion())
+                .is
+                .greaterThan(version_1.minVersion);
+            if ((!environment_1.Environment.isSourcePlugin() && String(slot) === '0') ||
+                (environment_1.Environment.isSourcePlugin() &&
+                    String(slot) === '0' &&
+                    !hasGlobalSources)) {
+                slot = -1;
+            }
             internal_1.exec('SetLocalPropertyAsync' +
-                (String(slot) === '0' ? '' : slot + 1), name, value, function (val) {
+                (String(slot) === '-1' ? '' : slot + 1), name, value, function (val) {
                 resolve(!(Number(val) < 0));
             });
         });
     };
-    /** Calls a function defined in an item/source */
-    Item.callFunc = function (func, arg) {
-        internal_1.exec('CallInner', func, arg);
-    };
     /** helper function to get current source on init */
-    Item.setBaseID = function (id) {
+    Item.setBaseId = function (id) {
         Item.baseID = id;
     };
-    /** helper function for Item.getCurrentSource() */
-    Item.getBaseID = function () {
+    /** helper function for Source.getCurrentSource() */
+    Item.getBaseId = function () {
         return Item.baseID;
     };
     Item.MAX_SLOTS = 2;
@@ -4048,7 +8461,7 @@ var Item = (function () {
     return Item;
 })();
 exports.Item = Item;
-},{"../core/environment":3,"./internal":20}],22:[function(require,module,exports){
+},{"../core/environment":4,"./internal":40,"./util/version":44}],42:[function(require,module,exports){
 var xml_1 = require('./xml');
 var JSON = (function () {
     function JSON(xml) {
@@ -4063,6 +8476,7 @@ var JSON = (function () {
         var selfCloseRegex = /(\/>)/g;
         var openResult = openingRegex.exec(sxml);
         var selfCloseResult = selfCloseRegex.exec(sxml);
+        sxml = sxml.replace(/&/g, '&amp;');
         var xmlDocument = (new DOMParser()).parseFromString(sxml, 'application/xml');
         if (xmlDocument.getElementsByTagName('parsererror').length > 0) {
             throw new Error('XML parsing error. Invalid XML string');
@@ -4118,7 +8532,7 @@ var JSON = (function () {
     return JSON;
 })();
 exports.JSON = JSON;
-},{"./xml":24}],23:[function(require,module,exports){
+},{"./xml":45}],43:[function(require,module,exports){
 function applyMixins(derivedCtor, baseCtors) {
     baseCtors.forEach(function (baseCtor) {
         Object.getOwnPropertyNames(baseCtor.prototype).forEach(function (name) {
@@ -4130,7 +8544,51 @@ function applyMixins(derivedCtor, baseCtors) {
     });
 }
 exports.applyMixins = applyMixins;
-},{}],24:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
+exports.minVersion = '2.8.1603.0401';
+function versionCompare(version) {
+    var parts = version.split('.');
+    var comp = function (prev, curr, idx) {
+        if ((parts[idx] < curr && prev !== -1) || prev === 1) {
+            return 1;
+        }
+        else if (parts[idx] > curr || prev === -1) {
+            return -1;
+        }
+        else {
+            return 0;
+        }
+    };
+    return {
+        is: {
+            lessThan: function (compare) {
+                var cParts = compare.split('.');
+                return cParts.reduce(comp, parts[0]) === 1;
+            },
+            greaterThan: function (compare) {
+                var cParts = compare.split('.');
+                return cParts.reduce(comp, parts[0]) === -1;
+            },
+            equalsTo: function (compare) {
+                var cParts = compare.split('.');
+                return cParts.reduce(comp, parts[0]) === 0;
+            }
+        }
+    };
+}
+exports.versionCompare = versionCompare;
+function getVersion() {
+    var xbcPattern = /XSplit Broadcaster\s(.*?)\s/;
+    var xbcMatch = navigator.appVersion.match(xbcPattern);
+    if (xbcMatch !== null) {
+        return xbcMatch[1];
+    }
+    else {
+        throw new Error('not loaded in XSplit Broadcaster');
+    }
+}
+exports.getVersion = getVersion;
+},{}],45:[function(require,module,exports){
 var XML = (function () {
     function XML(json) {
         var attributes = '';
@@ -4185,7 +8643,7 @@ var XML = (function () {
     return XML;
 })();
 exports.XML = XML;
-},{}],25:[function(require,module,exports){
+},{}],46:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var json_1 = require('../internal/util/json');
 var xml_1 = require('../internal/util/xml');
@@ -4193,7 +8651,10 @@ var xml_1 = require('../internal/util/xml');
  * The AudioDevice Class is the object returned by
  * {@link #system/System System Class'} getAudioDevices method. It provides you
  * with methods to fetch the audio device object's attributes, and also provides
- * methods to convert it back to an XML object that is compatible with XBC
+ * methods to convert it back to an XML object that is compatible with XBC.
+ *
+ * If you are looking to add a microphone device to the stage, please see
+ * {@link #system/MicrophoneDevice System/MicrophoneDevice} instead.
  *
  * ### Basic Usage
  *
@@ -4243,7 +8704,7 @@ var AudioDevice = (function () {
      * #### Usage
      *
      * ```javascript
-     * var audioDeviceID = device.getID();
+     * var audioDeviceID = device.getId();
      * ```
      */
     AudioDevice.prototype.getId = function () {
@@ -4272,7 +8733,7 @@ var AudioDevice = (function () {
      *
      * ```javascript
      * var audioDataFlow = device.getDataFlow();
-     *   //where possible values are "render" or "capture"
+     *   //where possible values are 'render' or 'capture'
      * ```
      */
     AudioDevice.prototype.getDataFlow = function () {
@@ -4317,10 +8778,10 @@ var AudioDevice = (function () {
      * #### Usage
      *
      * ```javascript
-     * audioDevice.setLevel(100);
+     * audioDevice._setLevel(100);
      * ```
      */
-    AudioDevice.prototype.setLevel = function (level) {
+    AudioDevice.prototype._setLevel = function (level) {
         this._level = level;
         return this;
     };
@@ -4349,10 +8810,10 @@ var AudioDevice = (function () {
      * #### Usage
      *
      * ```javascript
-     * audioDevice.setEnabled(true);
+     * audioDevice._setEnabled(true);
      * ```
      */
-    AudioDevice.prototype.setEnabled = function (enabled) {
+    AudioDevice.prototype._setEnabled = function (enabled) {
         this._enable = enabled;
         return this;
     };
@@ -4381,10 +8842,10 @@ var AudioDevice = (function () {
      * #### Usage
      *
      * ```javascript
-     * audioDevice.setSystemLevel(100);
+     * audioDevice._setSystemLevel(100);
      * ```
      */
-    AudioDevice.prototype.setSystemLevel = function (hwlevel) {
+    AudioDevice.prototype._setSystemLevel = function (hwlevel) {
         this._hwlevel = hwlevel;
         return this;
     };
@@ -4417,10 +8878,10 @@ var AudioDevice = (function () {
      * //     * AudioDevice.SYSTEM_LEVEL_MUTE (0)
      * //     * AudioDevice.SYSTEM_LEVEL_ENABLE (1)
      * //     * AudioDevice.SYSTEM_MUTE_CHANGE_NOT_ALLOWED (255)
-     * audioDevice.setSystemEnabled(AudioDevice.SYSTEM_LEVEL_MUTE);
+     * audioDevice._setSystemEnabled(AudioDevice.SYSTEM_LEVEL_MUTE);
      * ```
      */
-    AudioDevice.prototype.setSystemEnabled = function (hwenabled) {
+    AudioDevice.prototype._setSystemEnabled = function (hwenabled) {
         this._hwenable = hwenabled;
         return this;
     };
@@ -4449,17 +8910,17 @@ var AudioDevice = (function () {
      * #### Usage
      *
      * ```javascript
-     * audioDevice.setDelay(100);
+     * audioDevice._setDelay(100);
      * ```
      */
-    AudioDevice.prototype.setDelay = function (delay) {
+    AudioDevice.prototype._setDelay = function (delay) {
         this._delay = delay;
         return this;
     };
     /**
      * return: string
      *
-     * Converts the AudioDevice item to XML-formatted string
+     * Converts the AudioDevice object to XML-formatted string
      *
      * #### Usage
      *
@@ -4472,9 +8933,9 @@ var AudioDevice = (function () {
         device.tag = 'dev';
         device.selfclosing = true;
         device['id'] = this.getId();
-        device['level'] = this.getLevel().toFixed(6);
+        device['level'] = (this.getLevel() / 100).toFixed(6);
         device['enable'] = this.isEnabled() ? 1 : 0;
-        device['hwlevel'] = this.getSystemLevel().toFixed(6);
+        device['hwlevel'] = (this.getSystemLevel() / 100).toFixed(6);
         device['hwenable'] = this.getSystemEnabled();
         device['delay'] = this.getDelay();
         device['mix'] = this._mix;
@@ -4507,11 +8968,11 @@ var AudioDevice = (function () {
             defaultConsole: (deviceJXON['DefaultConsole'] === '1'),
             defaultMultimedia: (deviceJXON['DefaultMultimedia'] === '1')
         });
-        audio.setLevel(Number(deviceJXON['level'] !== undefined ? deviceJXON['level'] : 1))
-            .setEnabled(deviceJXON['enable'] !== undefined ? deviceJXON['enable'] === '1' : true)
-            .setSystemLevel(Number(deviceJXON['hwlevel'] !== undefined ? deviceJXON['hwlevel'] : -1))
-            .setSystemEnabled(deviceJXON['hwenable'] !== undefined ? deviceJXON['hwenable'] : 255)
-            .setDelay(Number(deviceJXON['delay'] !== undefined ? deviceJXON['delay'] : 0));
+        audio._setLevel(Number(deviceJXON['level'] !== undefined ? deviceJXON['level'] * 100 : 100))
+            ._setEnabled(deviceJXON['enable'] !== undefined ? deviceJXON['enable'] === '1' : true)
+            ._setSystemLevel(Number(deviceJXON['hwlevel'] !== undefined ? deviceJXON['hwlevel'] * 100 : -100))
+            ._setSystemEnabled(Number(deviceJXON['hwenable'] !== undefined ? deviceJXON['hwenable'] : 255))
+            ._setDelay(Number(deviceJXON['delay'] !== undefined ? deviceJXON['delay'] : 0));
         return audio;
     };
     AudioDevice.STATE_ACTIVE = 'Active';
@@ -4523,7 +8984,7 @@ var AudioDevice = (function () {
     return AudioDevice;
 })();
 exports.AudioDevice = AudioDevice;
-},{"../internal/util/json":22,"../internal/util/xml":24}],26:[function(require,module,exports){
+},{"../internal/util/json":42,"../internal/util/xml":45}],47:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var json_1 = require('../internal/util/json');
 var xml_1 = require('../internal/util/xml');
@@ -4531,8 +8992,8 @@ var app_1 = require('../internal/app');
 /**
  * The CameraDevice Class is the object returned by
  * {@link #system/System System Class'} getCameraDevices method. It provides
- * you with methods to fetch the Camera Device's id, name, and convert it to
- * an XML object that is compatible with XBC
+ * you with methods to fetch the Camera Device's id, name, and to add it as
+ * a source in the current scene.
  *
  * ### Basic Usage
  *
@@ -4565,7 +9026,7 @@ var CameraDevice = (function () {
      * #### Usage
      *
      * ```javascript
-     * var cameraID = device.getID();
+     * var cameraID = device.getId();
      * ```
      */
     CameraDevice.prototype.getId = function () {
@@ -4603,7 +9064,7 @@ var CameraDevice = (function () {
         return xml_1.XML.parseJSON(json);
     };
     /**
-     * param: deviceJSON<JXON>
+     * param: (deviceJSON: JXON)
      * ```
      * return: CameraDevice
      * ```
@@ -4637,7 +9098,48 @@ var CameraDevice = (function () {
     return CameraDevice;
 })();
 exports.CameraDevice = CameraDevice;
-},{"../internal/app":17,"../internal/util/json":22,"../internal/util/xml":24}],27:[function(require,module,exports){
+},{"../internal/app":37,"../internal/util/json":42,"../internal/util/xml":45}],48:[function(require,module,exports){
+/// <reference path="../../defs/es6-promise.d.ts" />
+var app_1 = require('../internal/app');
+/**
+ *  Class for adding files (such as images and media)
+ *  from your file system to the stage.
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var XJS = require('xjs');
+ * var File = XJS.File;
+ *
+ * var filePromise = new File('C:\\Users\\Public\\Music\\song.mp3').addToScene();
+ * ```
+ */
+var File = (function () {
+    /**
+     *  param: (file: string)
+     *
+     *  Creates a File object pertaining to a file's full path.
+     */
+    function File(file) {
+        this._path = file;
+    }
+    /**
+     *  return: Promise<boolean>
+     *
+     *  Adds this file to the current scene.
+     */
+    File.prototype.addToScene = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            app_1.App.callFunc('addfile', _this._path).then(function () {
+                resolve(true);
+            });
+        });
+    };
+    return File;
+})();
+exports.File = File;
+},{"../internal/app":37}],49:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var rectangle_1 = require('../util/rectangle');
 var json_1 = require('../internal/util/json');
@@ -4646,8 +9148,7 @@ var app_1 = require('../internal/app');
 /**
  * The Game Class is the object returned by {@link #system/System System Class'}
  * getGames method. It provides you with methods to fetch the game object's
- * attributes, and also provides methods to convert it back to an XML object
- * that is compatible with XBC
+ * attributes, as well as methods to add any game to the current scene.
  *
  * ### Basic Usage
  *
@@ -4657,12 +9158,11 @@ var app_1 = require('../internal/app');
  * var xml;
  *
  * System.getGames().then(function(games) {
- * 	for (var i in games) {
- * 		if(games[i].isFullscreen()) {
- * 			xml = games[i].toXML();
- * 			// Do something with the xml here. Probably add it to the current scene
- * 		}
- * 	}
+ *  for (var i in games) {
+ *    if(games[i].isFullscreen()) {
+ *      games[i].addToScene();
+ *    }
+ *  }
  * });
  * ```
  */
@@ -4735,7 +9235,7 @@ var Game = (function () {
     /**
      * return: Rectangle
      *
-     * Gets the game resolution.
+     * Gets the game resolution in pixels.
      *
      * #### Usage
      *
@@ -4789,24 +9289,32 @@ var Game = (function () {
         return this._lastframets;
     };
     /**
+     * return: number
+     *
      * Get the FPS Render of the game
      */
     Game.prototype.getFpsRender = function () {
         return this._fpsRender;
     };
     /**
+     * return: number
+     *
      * Get the Captured FPS of the game
      */
     Game.prototype.getFpsCapture = function () {
         return this._fpsCapture;
     };
     /**
+     * return: string
+     *
      * Get the image name of the game
      */
     Game.prototype.getImageName = function () {
         return this._imagename;
     };
     /**
+     * return: string
+     *
      * Get the replace image value of the game
      */
     Game.prototype.getReplace = function () {
@@ -4888,14 +9396,72 @@ var Game = (function () {
             });
         });
     };
+    /**
+     *  return: Game
+     *
+     *  Returns a special Game object that may be added to the stage. This
+     *  object automatically detects any compatible games that are running
+     *  and focused, and changes the displayed game on the stage accordingly.
+     *
+     *  #### Usage
+     *
+     * ```javascript
+     * var xjs = require('xjs');
+     * xjs.Game.autoDetect().addToScene();
+     * ```
+     */
+    Game.autoDetect = function () {
+        if (Game._autoDetect === undefined) {
+            Game._autoDetect = new Game();
+            var ad = Game._autoDetect;
+            ad._pid = 0;
+            ad._handle = 0;
+            ad._hwnd = 0;
+            ad._gapitype = "";
+            ad._width = 0;
+            ad._height = 0;
+            ad._flags = 0;
+            ad._wndname = "";
+            ad._lastframets = 0;
+            ad._fpsRender = 0;
+            ad._fpsCapture = 0;
+            ad._imagename = "";
+            Game._autoDetect.addToScene = function () {
+                return new Promise(function (resolve) {
+                    var adstring = '<item GameCapTrackActive="1" GameCapTrackActiveFullscreen="0" item="&lt;src pid=&quot;0&quot; handle=&quot;0&quot; hwnd=&quot;0&quot; GapiType=&quot;&quot; width=&quot;0&quot; height=&quot;0&quot; flags=&quot;0&quot; wndname=&quot;&quot; lastframets=&quot;0&quot; fpsRender=&quot;0.000000&quot; fpsCapture=&quot;0.000000&quot; imagename=&quot;&quot;/&gt; " name="Game: Auto Detect"  type="7" pos_left="0" pos_top="0" pos_right="0.5" pos_bottom="0.5"/>';
+                    app_1.App.callFunc('additem', adstring).then(function () {
+                        resolve(true);
+                    });
+                });
+            };
+        }
+        return Game._autoDetect;
+    };
     return Game;
 })();
 exports.Game = Game;
-},{"../internal/app":17,"../internal/util/json":22,"../internal/util/xml":24,"../util/rectangle":34}],28:[function(require,module,exports){
+},{"../internal/app":37,"../internal/util/json":42,"../internal/util/xml":45,"../util/rectangle":59}],50:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var json_1 = require('../internal/util/json');
 var xml_1 = require('../internal/util/xml');
 var app_1 = require('../internal/app');
+/**
+ * The MicrophoneDevice class provides you with methods to add a microphone
+ * device as a source on the stage.
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var XJS = require('xjs');
+ * var System = XJS.System;
+ *
+ * System.getMicrophones().then(function(microphones) {
+ *  for (var i in microphones) {
+ *    microphones[i].addToScene();
+ *  }
+ * });
+ * ```
+ */
 var MicrophoneDevice = (function () {
     function MicrophoneDevice() {
     }
@@ -4904,6 +9470,20 @@ var MicrophoneDevice = (function () {
         m._disp = jxon['disp'];
         m._name = jxon['name'];
         return m;
+    };
+    /**
+     * return: string
+     *
+     * Gets the display ID
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * var micDisplayId = device.getDisplayId();
+     * ```
+     */
+    MicrophoneDevice.prototype.getDisplayId = function () {
+        return this._disp;
     };
     /**
      * return: XML
@@ -4939,7 +9519,29 @@ var MicrophoneDevice = (function () {
     return MicrophoneDevice;
 })();
 exports.MicrophoneDevice = MicrophoneDevice;
-},{"../internal/app":17,"../internal/util/json":22,"../internal/util/xml":24}],29:[function(require,module,exports){
+},{"../internal/app":37,"../internal/util/json":42,"../internal/util/xml":45}],51:[function(require,module,exports){
+var internal_1 = require('../internal/internal');
+/**
+ *  This class servers to allow developers to add new screen regions or window
+ *  regions to the stage in XSplit Broadcaster.
+ */
+var Screen = (function () {
+    function Screen() {
+    }
+    /**
+     * Initializes the screen region selector crosshair so user may select
+     * a desktop region or a window to add to the stage in the current scene.
+     */
+    Screen.prototype.addToScene = function () {
+        return new Promise(function (resolve) {
+            internal_1.exec('AppCallFunc', 'addscreen');
+            resolve(true);
+        });
+    };
+    return Screen;
+})();
+exports.Screen = Screen;
+},{"../internal/internal":40}],52:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var app_1 = require('../internal/app');
 var audio_1 = require('./audio');
@@ -5008,7 +9610,7 @@ var System = (function () {
      * return: Promise<AudioDevice[]>
      *
      * Gets audio devices, both input and output
-     * See also: @{link #system/AudioDevice System/AudioDevice}
+     * See also: {@link #system/AudioDevice System/AudioDevice}
      *
      * #### Usage
      *
@@ -5056,7 +9658,7 @@ var System = (function () {
      * return: Promise<CameraDevice[]>
      *
      * Gets all camera devices
-     * See also: @{link #system/CameraDevice System/CameraDevice}
+     * See also: {@link #system/CameraDevice System/CameraDevice}
      *
      * #### Usage
      *
@@ -5090,7 +9692,7 @@ var System = (function () {
      * return: Promise<Game[]>
      *
      * Gets all currently running games
-     * See also: @{link #system/Game System/Game}
+     * See also: {@link #system/Game System/Game}
      *
      * #### Usage
      *
@@ -5119,7 +9721,7 @@ var System = (function () {
      * return: Promise<MicrophoneDevice[]>
      *
      * Gets all audio capture devices that may be added to the stage
-     * See also: @{link #system/MicrophoneDevice System/MicrophoneDevice}
+     * See also: {@link #system/MicrophoneDevice System/MicrophoneDevice}
      *
      * #### Usage
      *
@@ -5136,7 +9738,9 @@ var System = (function () {
                 if (micsJXON !== undefined) {
                     var micsJXONLength = micsJXON.length;
                     for (var i = 0; i < micsJXONLength; ++i) {
-                        mics.push(microphone_1.MicrophoneDevice.parse(micsJXON[i]));
+                        if (micsJXON[i]['WaveInId'] !== undefined) {
+                            mics.push(microphone_1.MicrophoneDevice.parse(micsJXON[i]));
+                        }
                     }
                 }
                 resolve(mics);
@@ -5156,8 +9760,8 @@ var System = (function () {
      * System.getSystemFonts().then(function(fontsArray) {
      *   var fontsArrayLength = fontsArray.length;
      *   for (var i = 0; i < fontsArrayLength; ++i) {
-     *     var option = document.createElement("option");
-     *     option.text = "Kiwi";
+     *     var option = document.createElement('option');
+     *     option.text = 'Kiwi';
      *     mySelect.add(option);
      *   }
      * });
@@ -5243,7 +9847,172 @@ var System = (function () {
     return System;
 })();
 exports.System = System;
-},{"../core/environment":3,"../internal/app":17,"../internal/internal":20,"./audio":25,"./camera":26,"./game":27,"./microphone":28}],30:[function(require,module,exports){
+},{"../core/environment":4,"../internal/app":37,"../internal/internal":40,"./audio":46,"./camera":47,"./game":49,"./microphone":50}],53:[function(require,module,exports){
+/// <reference path="../../defs/es6-promise.d.ts" />
+var app_1 = require('../internal/app');
+/**
+ *  Class for adding a web source to the stage.
+ *  URLs will use http by default unless https
+ *  is specified. This class supports adding
+ *  locally hosted HTML files as well.
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var XJS = require('xjs');
+ * var Url = XJS.Url;
+ *
+ * var urlPromise = new Url('https://www.xsplit.com').addToScene();
+ * ```
+ */
+var Url = (function () {
+    /**
+     *  param: (url: string)
+     *
+     *  Creates a URL object. If unspecified, protocol is http.
+     */
+    function Url(url) {
+        this._url = url;
+    }
+    Url.prototype._getUrl = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (/^https?:\/\//i.test(_this._url)) {
+                resolve(_this._url);
+            }
+            else if (/[a-z]+:\/\//i.test(_this._url)) {
+                reject(new Error('You may only add HTTP or HTTPS URLs to the stage.'));
+            }
+            else {
+                resolve('http://' + _this._url);
+            }
+        });
+    };
+    /**
+     *  return: Promise<boolean>
+     *
+     *  Adds this URL to the current scene as an HTML source.
+     *
+     *  Will raise an error if URL is not http or https.
+     */
+    Url.prototype.addToScene = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            _this._getUrl().then(function (url) {
+                app_1.App.callFunc('addurl', url).then(function () {
+                    resolve(true);
+                });
+            }).catch(function (error) {
+                reject(error);
+            });
+        });
+    };
+    return Url;
+})();
+exports.Url = Url;
+},{"../internal/app":37}],54:[function(require,module,exports){
+/// <reference path="../../defs/es6-promise.d.ts" />
+var app_1 = require('../internal/app');
+var json_1 = require('../internal/util/json');
+var xml_1 = require('../internal/util/xml');
+var io_1 = require('../util/io');
+var environment_1 = require('../core/environment');
+/**
+ *  Special class for adding a video playlist to the stage.
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var XJS = require('xjs');
+ * var VideoPlaylist = XJS.VideoPlaylist;
+ *
+ * var vids = new VideoPlaylist(['C:\\Users\\Public\\Music\\video1.mp4',
+      'C:\\Users\\Public\\Music\\video2.mp4']).addToScene();
+ * ```
+ */
+var VideoPlaylist = (function () {
+    /**
+     *  param: (files: string[])
+     *
+     *  Creates a VideoPlaylist object for several video files.
+     */
+    function VideoPlaylist(items) {
+        this._id = 0;
+        this._fileplaylist = '';
+        this._playlist = items;
+    }
+    /**
+     * return: XML
+     *
+     * Creates an XML object with the playlist properties. This method is used
+     * internally for the `addToScene` method.
+     */
+    VideoPlaylist.prototype.toXML = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            var filePromises = _this._playlist.map(function (filename) {
+                return new Promise(function (ioResolve) {
+                    io_1.IO.getVideoDuration(filename).then(function (duration) {
+                        ioResolve(duration);
+                    }).catch(function (err) {
+                        ioResolve(err);
+                    });
+                });
+            });
+            Promise.all(filePromises).then(function (duration) {
+                var fileItems = new json_1.JSON();
+                var isError = false;
+                for (var i = 0; i < _this._playlist.length; i++) {
+                    if (typeof duration === 'object') {
+                        isError = true;
+                        break;
+                    }
+                    _this._fileplaylist += _this._playlist[i] + '*' + i + '*1*' +
+                        duration[i] + '*100*0*0*0*0*0|';
+                }
+                if (!isError) {
+                    fileItems.tag = 'item';
+                    fileItems['type'] = '1';
+                    fileItems['name'] = 'Video Playlist';
+                    fileItems['pos_left'] = '0.250000';
+                    fileItems['pos_top'] = '0.250000';
+                    fileItems['pos_right'] = '0.750000';
+                    fileItems['pos_bottom'] = '0.750000';
+                    fileItems['item'] = _this._playlist[0] + '*0';
+                    fileItems['FilePlaylist'] = _this._fileplaylist;
+                    resolve(xml_1.XML.parseJSON(fileItems));
+                }
+                else {
+                    reject(new Error('One or more files included are invalid.'));
+                }
+            });
+        });
+    };
+    /**
+     *  Adds the prepared video playlist to the current scene.
+     *
+     *  This function is not available to sources.
+     */
+    VideoPlaylist.prototype.addToScene = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (environment_1.Environment.isSourcePlugin()) {
+                reject(Error('This function is not available to sources.'));
+            }
+            else {
+                _this.toXML().then(function (fileitem) {
+                    app_1.App.callFunc('additem', ' ' + fileitem)
+                        .then(function () { resolve(true); });
+                }).catch(function (err) {
+                    reject(err);
+                });
+            }
+        });
+    };
+    return VideoPlaylist;
+})();
+exports.VideoPlaylist = VideoPlaylist;
+},{"../core/environment":4,"../internal/app":37,"../internal/util/json":42,"../internal/util/xml":45,"../util/io":57}],55:[function(require,module,exports){
 var Color = (function () {
     function Color(props) {
         if (props['rgb'] !== undefined) {
@@ -5319,7 +10088,7 @@ var Color = (function () {
     return Color;
 })();
 exports.Color = Color;
-},{}],31:[function(require,module,exports){
+},{}],56:[function(require,module,exports){
 // simple event emitter
 var EventEmitter = (function () {
     function EventEmitter() {
@@ -5349,7 +10118,7 @@ var EventEmitter = (function () {
     return EventEmitter;
 })();
 exports.EventEmitter = EventEmitter;
-},{}],32:[function(require,module,exports){
+},{}],57:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var internal_1 = require('../internal/internal');
 var IO = (function () {
@@ -5364,7 +10133,9 @@ var IO = (function () {
      * Returns a base-64 encoded string of the target file's contents.
      * UTF-8 encoded files may be decoded through:
      * ```javascript
-     * var decodedContent = decodeURIComponent(escape(window.atob(base64Content));
+     * IO.getFileContent('C:\\text.txt').then(function(base64Content) {
+     *   var actualContent = decodeURIComponent(escape(window.atob(base64Content));
+     * });
      * ```
      */
     IO.getFileContent = function (path) {
@@ -5383,7 +10154,9 @@ var IO = (function () {
      *
      * UTF-8 encoded content may be decoded through:
      * ```javascript
-     * var decodedContent = decodeURIComponent(escape(window.atob(base64Content));
+     * IO.getWebContent('http://example.com').then(function(base64Content) {
+     *   var actualContent = decodeURIComponent(escape(window.atob(base64Content));
+     * });
      * ```
      */
     IO.getWebContent = function (url) {
@@ -5456,13 +10229,44 @@ var IO = (function () {
             });
         });
     };
+    IO.getVideoDuration = function (file) {
+        return new Promise(function (resolve, reject) {
+            if (IO._callback[file] === undefined) {
+                IO._callback[file] = [];
+            }
+            IO._callback[file].push({ resolve: resolve, reject: reject });
+            internal_1.exec('GetVideoDuration', file);
+        });
+    };
+    ;
     IO._ALLOW_MULTI_SELECT = 0x200;
     IO._FILE_MUST_EXIST = 0x1000;
     IO._FORCE_SHOW_HIDDEN = 0x10000000;
+    /**
+     * param: (file: string)
+     *
+     * return: Promise<number>
+     *
+     * Returns the duration of a video file on the local system, specified in
+     * units of 10^-7 seconds.
+     */
+    IO._callback = {};
     return IO;
 })();
 exports.IO = IO;
-},{"../internal/internal":20}],33:[function(require,module,exports){
+window.OnGetVideoDuration = function (file, duration) {
+    IO._callback[decodeURIComponent(file)].shift().resolve(duration);
+    if (IO._callback[decodeURIComponent(file)].length === 0) {
+        delete IO._callback[decodeURIComponent(file)];
+    }
+};
+window.OnGetVideoDurationFailed = function (file) {
+    IO._callback[decodeURIComponent(file)].shift().reject(Error('Invalid file path.'));
+    if (IO._callback[decodeURIComponent(file)].length === 0) {
+        delete IO._callback[decodeURIComponent(file)];
+    }
+};
+},{"../internal/internal":40}],58:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var isReady = false;
 var readyPromise = new Promise(function (resolve) {
@@ -5481,7 +10285,16 @@ function setReady() {
     isReady = true;
 }
 exports.setReady = setReady;
-},{}],34:[function(require,module,exports){
+},{}],59:[function(require,module,exports){
+/**
+ *  The Rectangle class is a utility class used in many different parts of the
+ *  framework. Please note that there are cases where the framework uses
+ *  absolute (pixel) measurements, and cases where relative measurements are
+ *  required (0 being the left/top edges and 1 being the right/bottom edges.)
+ *
+ *  Please check the documentation of each function to determine the necessary
+ *  parameters for the Rectangle to be created.
+ */
 var Rectangle = (function () {
     function Rectangle() {
     }
@@ -5587,6 +10400,15 @@ var Rectangle = (function () {
         }
         return this;
     };
+    /**
+     *  param: (width: number, height: number)
+     *  ```
+     *  return: Rectangle
+     *  ```
+     *  Creates a rectangle from width and height dimensions. Absolute (pixels)
+     *  and relative (0-1) dimensions are accepted. Refer to the documentation
+     *  of each individual function to see which one is necessary.
+     */
     Rectangle.fromDimensions = function (width, height) {
         if (width < 0 || height < 0) {
             throw new Error('Rectangle dimensions cannot be negative.');
@@ -5596,7 +10418,16 @@ var Rectangle = (function () {
         rect._height = height;
         return rect;
     };
-    Rectangle.fromCoordinates = function (top, left, right, bottom) {
+    /**
+     *  param: (left: number, top: number, right: number, bottom: number)
+     *  ```
+     *  return: Rectangle
+     *  ```
+     *  Creates a rectangle from coordinates. Absolute (pixels)
+     *  and relative (0-1) dimensions are accepted. Refer to the documentation
+     *  of each individual function to see which one is necessary.
+     */
+    Rectangle.fromCoordinates = function (left, top, right, bottom) {
         if (top > bottom) {
             throw new Error('Top coordinate must be smaller than bottom.');
         }
@@ -5610,9 +10441,20 @@ var Rectangle = (function () {
         rect.setBottom(bottom); // calculates height
         return rect;
     };
+    /**
+     *  return: string
+     *
+     *  Returns a comma-separated string containing the width and height values.
+     */
     Rectangle.prototype.toDimensionString = function () {
         return this._width + ',' + this._height;
     };
+    /**
+     *  return: string
+     *
+     *  Returns a comma-separated string containing the coordinates in the order:
+     *  left, top, right, bottom.
+     */
     Rectangle.prototype.toCoordinateString = function () {
         if (this._left === undefined) {
             throw new Error('This Rectangle instance does not have coordinates.');
@@ -5621,6 +10463,27 @@ var Rectangle = (function () {
             return this._left + ',' + this._top + ',' + this._right + ',' + this._bottom;
         }
     };
+    /**
+     *  return: string
+     *  ```
+     *  param: (format ?: string)
+     *  ```
+     *  Returns a string representation of the Rectangle object. If the format
+     *  optional parameter is omitted, then this is simply the string from
+     *  `toDimensionString()`. Sample usage:
+     *
+     *  ```javascript
+     *  console.log(rect.toString('Origin is at (:left, :top)'));```
+     *
+     *  You can format the output string by specifying the following markers in
+     *  the parameter:
+     *  - :left
+     *  - :top
+     *  - :right
+     *  - :bottom
+     *  - :width
+     *  - :height
+     */
     Rectangle.prototype.toString = function (value) {
         if (value === undefined) {
             return this.toDimensionString(); // all rectangles have dimensions
@@ -5639,7 +10502,7 @@ var Rectangle = (function () {
     return Rectangle;
 })();
 exports.Rectangle = Rectangle;
-},{}],35:[function(require,module,exports){
+},{}],60:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -5650,7 +10513,7 @@ var __extends = (this && this.__extends) || function (d, b) {
 var eventemitter_1 = require('../util/eventemitter');
 var internal_1 = require('../internal/internal');
 /** This utility class exposes functionality for source plugin developers to
- *  handle the configuration window for their source plugins. The framework also
+ *  handle the properties window for their source plugins. The framework also
  *  uses this class for its own internal purposes.
  *
  *  Developers can use this class to specify how their configuration HTML
@@ -5660,16 +10523,16 @@ var internal_1 = require('../internal/internal');
  * Inherits from: {@link #util/EventEmitter Util/EventEmitter}
  *
  *  At the moment, the only relevant event for developers is:
- *    - `set-selected-tab`: used when using Tabbed mode. Passes the name of the selected tab so configuration window can update itself accordingly.
+ *    - `set-selected-tab`: used when using Tabbed mode. Passes the name of the selected tab so properties window can update itself accordingly.
  *
  *  Use the `on(event: string, handler: Function)` function to listen to an event.
  */
-var SourceConfigWindow = (function (_super) {
-    __extends(SourceConfigWindow, _super);
+var SourcePropsWindow = (function (_super) {
+    __extends(SourcePropsWindow, _super);
     /**
      *  Use getInstance() instead.
      */
-    function SourceConfigWindow() {
+    function SourcePropsWindow() {
         var _this = this;
         _super.call(this);
         window.addEventListener('message', function (event) {
@@ -5696,35 +10559,34 @@ var SourceConfigWindow = (function (_super) {
         this.on('config-load', function () {
             _this._informConfigLoaded();
         });
-        SourceConfigWindow._instance = this;
+        SourcePropsWindow._instance = this;
     }
     /**
      *  Gets the instance of the window utility. Use this instead of the constructor.
      */
-    SourceConfigWindow.getInstance = function () {
-        if (SourceConfigWindow._instance === undefined) {
-            SourceConfigWindow._instance = new SourceConfigWindow();
+    SourcePropsWindow.getInstance = function () {
+        if (SourcePropsWindow._instance === undefined) {
+            SourcePropsWindow._instance = new SourcePropsWindow();
         }
-        return SourceConfigWindow._instance;
+        return SourcePropsWindow._instance;
     };
     // helper function to communicate with built-in container
-    SourceConfigWindow.prototype._notify = function (obj) {
+    SourcePropsWindow.prototype._notify = function (obj) {
         window.parent.postMessage(JSON.stringify(obj), '*');
     };
     /**
-     *  Informs the application that the plugin intends to use the entire
-     *  window for rendering its configuration.
+     *  Informs the application that the plugin intends to use the entire window for rendering its configuration.
      */
-    SourceConfigWindow.prototype.useFullWindow = function () {
-        this._setRenderMode(SourceConfigWindow._MODE_FULL);
+    SourcePropsWindow.prototype.useFullWindow = function () {
+        this._setRenderMode(SourcePropsWindow._MODE_FULL);
         // use default size to avoid layout issues. plugin can resize later
-        this.resizeConfig(354, 390);
+        this.resize(354, 390);
     };
     /**
      *  param: ({customTabs: string[], tabOrder: string[]})
      *
      *  Informs the application that the plugin intends to use the existing tab
-     *  system to render its configuration window.
+     *  system to render its properties window.
      *
      *  The `customTabs` node should contain a list of tab titles that the plugin
      *  will create for itself.
@@ -5733,12 +10595,12 @@ var SourceConfigWindow = (function (_super) {
      *  from the specified custom tabs, and the set of reusable XSplit tabs:
      *  'Color', 'Layout' and 'Transition'.
      */
-    SourceConfigWindow.prototype.useTabbedWindow = function (config) {
-        this._setRenderMode(SourceConfigWindow._MODE_TABBED);
+    SourcePropsWindow.prototype.useTabbedWindow = function (config) {
+        this._setRenderMode(SourcePropsWindow._MODE_TABBED);
         this._declareCustomTabs(config.customTabs);
         this._setTabOrder(config.tabOrder);
     };
-    SourceConfigWindow.prototype._setRenderMode = function (renderMode) {
+    SourcePropsWindow.prototype._setRenderMode = function (renderMode) {
         this._mode = renderMode;
         this._notify({
             event: 'set-mode',
@@ -5746,30 +10608,30 @@ var SourceConfigWindow = (function (_super) {
         });
     };
     ;
-    SourceConfigWindow.prototype._setTabOrder = function (tabArray) {
+    SourcePropsWindow.prototype._setTabOrder = function (tabArray) {
         this._notify({
             event: 'set-tab-order',
             value: JSON.stringify(tabArray)
         });
     };
     ;
-    SourceConfigWindow.prototype._declareCustomTabs = function (tabArray) {
+    SourcePropsWindow.prototype._declareCustomTabs = function (tabArray) {
         this._notify({
             event: 'set-custom-tabs',
             value: JSON.stringify(tabArray)
         });
     };
     ;
-    SourceConfigWindow.prototype._informConfigLoaded = function () {
+    SourcePropsWindow.prototype._informConfigLoaded = function () {
         this._notify({ event: 'load' });
     };
     /**
      *  param: width<number>, height<number>
      *
-     *  Resizes the configuration window. Currently only works when using full
+     *  Resizes the properties window. Currently only works when using full
      *  window mode.
      */
-    SourceConfigWindow.prototype.resizeConfig = function (width, height) {
+    SourcePropsWindow.prototype.resize = function (width, height) {
         this._notify({
             event: 'resize',
             value: JSON.stringify({
@@ -5779,27 +10641,46 @@ var SourceConfigWindow = (function (_super) {
         });
     };
     ;
-    /** Closes the configuration window. */
-    SourceConfigWindow.prototype.closeConfig = function () {
+    /**
+     *  param: name<string>
+     *
+     *  Changes the title of the source properties dialog.
+     *  Note: The title change is temporary, as re-opening the source properties
+     *  resets the title to the display name of the source
+     *  (custom name takes precedence over name)
+     */
+    SourcePropsWindow.prototype.requestDialogTitleChange = function (name) {
+        this._notify({
+            event: 'change-dialog-title',
+            value: name
+        });
+    };
+    ;
+    /** Closes the properties window. */
+    SourcePropsWindow.prototype.close = function () {
         internal_1.exec('Close');
     };
     ;
-    SourceConfigWindow._MODE_FULL = 'full';
-    SourceConfigWindow._MODE_TABBED = 'embedded';
-    return SourceConfigWindow;
+    SourcePropsWindow._MODE_FULL = 'full';
+    SourcePropsWindow._MODE_TABBED = 'embedded';
+    return SourcePropsWindow;
 })(eventemitter_1.EventEmitter);
-exports.SourceConfigWindow = SourceConfigWindow;
-},{"../internal/internal":20,"../util/eventemitter":31}],36:[function(require,module,exports){
+exports.SourcePropsWindow = SourcePropsWindow;
+},{"../internal/internal":40,"../util/eventemitter":56}],61:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
+/// <reference path="../../defs/object.d.ts" />
 var rectangle_1 = require('../util/rectangle');
 var environment_1 = require('../core/environment');
 var internal_1 = require('../internal/internal');
 /**
  *  This class is used to spawn new browser processes that can be used to open
- *  other URLS. Source plugins do not have this functionality (but their
- *  configuration windows may use this.)
+ *  other URLs. Source plugins do not have this functionality (but their
+ *  properties windows may use this.)
  *
- *  Note that opening a new dialog replaces the old one.
+ *  Note that opening a new dialog replaces the old one. Also, dialogs are
+ *  considered to be the same type of window as their parent windows: e.g.,
+ *  dialogs from extension windows are considered by the framework to have
+ *  access to the same functions as extensions.
  *
  *  Most of the methods are chainable.
  *
@@ -5824,17 +10705,27 @@ var internal_1 = require('../internal/internal');
  *    });
  *  });
  *
- *  // in the opened dialog, simply call
- *  // Dialog.return('returnedStringValue');
- *  // to return a value
+ *  // in the opened dialog, call Dialog.return() to return a value
+ *  //
+ *  // see documentation below for more details
  *  ```
  */
 var Dialog = (function () {
     function Dialog() {
+        var _this = this;
         if (environment_1.Environment.isSourcePlugin()) {
             throw new Error('Dialogs are not available for source plugins.');
         }
         else {
+            this._result = null;
+            var eventListener = function (e) {
+                // self-deleting event listener
+                e.target.removeEventListener(e.type, eventListener);
+                _this._result = e.detail;
+                _this._resultListener = null;
+            };
+            document.addEventListener('xsplit-dialog-result', eventListener);
+            this._resultListener = eventListener;
             return this;
         }
     }
@@ -5864,16 +10755,28 @@ var Dialog = (function () {
      * *Chainable.*
      */
     Dialog.createAutoDialog = function (url) {
-        var dialog = new Dialog();
-        dialog._url = url;
-        dialog._autoclose = true;
-        return dialog;
+        if (environment_1.Environment.isSourceConfig()) {
+            throw new Error('Auto dialogs are not available for config windows.');
+        }
+        else {
+            var dialog = new Dialog();
+            dialog._url = url;
+            dialog._autoclose = true;
+            return dialog;
+        }
     };
     /**
-     *  param: (result: string)
+     *  param: (result ?: string)
      *
-     *  Closes this dialog with an optional string result. (Call this from the
-     *  dialog.)
+     *  Closes this dialog with an optional string result. For more complex
+     *  return values, try JSON.stringify. (Call this method from the dialog.)
+     *
+     *  As an alternative, lightweight dialogs that do not want to include xjs.js
+     *  may simply call native XBC methods to return a value.
+     *  ```javascript
+     *  external.SetDialogResult(stringResult);
+     *  external.Close();
+     *  ```
      */
     Dialog.return = function (result) {
         if (result !== undefined) {
@@ -5886,7 +10789,7 @@ var Dialog = (function () {
      *
      *  return: Dialog
      *
-     *  Sets the size of the dialog to be displayed.
+     *  Sets the size in pixels of the dialog to be displayed.
      *
      * *Chainable.*
      */
@@ -5958,6 +10861,7 @@ var Dialog = (function () {
      * *Chainable.*
      */
     Dialog.prototype.show = function () {
+        this._result = null;
         if (this._autoclose) {
             internal_1.exec('NewAutoDialog', this._url, '', this._size === undefined ?
                 undefined : (this._size.getWidth() + ',' + this._size.getHeight()));
@@ -5974,13 +10878,33 @@ var Dialog = (function () {
      *  Gets the string result returned from the spawned dialog.
      */
     Dialog.prototype.getResult = function () {
+        var _this = this;
         return new Promise(function (resolve) {
-            var eventListener = function (e) {
-                // self-deleting event listener
-                e.target.removeEventListener(e.type, eventListener);
-                resolve(e.detail);
-            };
-            document.addEventListener('xsplit-dialog-result', eventListener);
+            if (_this._result !== null) {
+                resolve(_this._result);
+            }
+            else if (_this._resultListener === null) {
+                var eventListener = function (e) {
+                    // self-deleting event listener
+                    e.target.removeEventListener(e.type, eventListener);
+                    _this._result = e.detail;
+                    _this._resultListener = null;
+                    resolve(_this._result);
+                };
+                document.addEventListener('xsplit-dialog-result', eventListener);
+                _this._resultListener = eventListener;
+            }
+            else {
+                Object.observe(_this, function (changes) {
+                    // Search for changes with the name as result
+                    var change = changes.filter(function (elem) {
+                        return elem.name === '_result';
+                    });
+                    if (change !== undefined && change.length > 0) {
+                        resolve(change[0].object._result);
+                    }
+                });
+            }
         });
     };
     /**
@@ -6017,7 +10941,7 @@ if (environment_1.Environment.isSourceConfig() || environment_1.Environment.isEx
             detail: result }));
     };
 }
-},{"../core/environment":3,"../internal/internal":20,"../util/rectangle":34}],37:[function(require,module,exports){
+},{"../core/environment":4,"../internal/internal":40,"../util/rectangle":59}],62:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -6027,14 +10951,17 @@ var __extends = (this && this.__extends) || function (d, b) {
 };
 var environment_1 = require('../core/environment');
 var eventemitter_1 = require('../util/eventemitter');
+var internal_1 = require('../internal/internal');
 var app_1 = require('../internal/app');
 var _RESIZE = '2';
 /** This utility class represents the extension window. It allows manipulation
  *  of the window (e.g., resizing), and also serves as an event emitter
  *  for all events that the window should be able to handle.
  *
- *  Currently, only the following event is available:
+ *  Currently, the following events are available:
  *    - `scene-load`: notifies in the event of a scene change. Handler is a function f(sceneNumber: number)
+ *    - `sources-list-highlight`: notifies when a user hovers over a source in the stage, returning its source id, or when the mouse moves out of a source bounding box, returning null. Source id is also returned when hovering over the bottom panel. Handler is a function f(id: string)
+ *    - `sources-list-select`: notifies when a user clicks a source in the stage. Handler is a function f(id: string)
  *
  *  Use the `on(event: string, handler: Function)` function to listen to an event.
  *
@@ -6064,17 +10991,77 @@ var ExtensionWindow = (function (_super) {
     ExtensionWindow.prototype.resize = function (width, height) {
         app_1.App.postMessage(_RESIZE, String(width), String(height));
     };
+    /**
+     * param: (value: string)
+     *
+     * Renames the extension window.
+     */
+    ExtensionWindow.prototype.setTitle = function (value) {
+        ExtensionWindow._value = value;
+        app_1.App.postMessage("8");
+    };
+    ;
+    /**
+     * param (flag: number)
+     *
+     * Modifies this extension's window border.
+     *
+     * "4" is th e base command on setting border flags.
+     *
+     * Flags can be:
+     *     (bit 0 - enable border)
+     *     (bit 1 - enable caption)
+     *     (bit 2 - enable sizing)
+     *     (bit 3 - enable minimize btn)
+     *     (bit 4 - enable maximize btn)
+     */
+    ExtensionWindow.prototype.setBorder = function (flag) {
+        app_1.App.postMessage("4", String(flag));
+    };
+    /**
+     * Closes this extension window
+     */
+    ExtensionWindow.prototype.close = function () {
+        app_1.App.postMessage("1");
+    };
+    /**
+     * Disable Close Button on this extension's window
+     */
+    ExtensionWindow.prototype.disableClose = function () {
+        app_1.App.postMessage("5", "0");
+    };
+    /**
+     * Enable Close Button on this extension's window
+     */
+    ExtensionWindow.prototype.enableClose = function () {
+        app_1.App.postMessage("5", "1");
+    };
     return ExtensionWindow;
 })(eventemitter_1.EventEmitter);
 exports.ExtensionWindow = ExtensionWindow;
 if (environment_1.Environment.isExtension()) {
+    window.Setid = function (id) {
+        internal_1.exec("CallHost", "setExtensionWindowTitle:" + id, ExtensionWindow._value);
+    };
     window.OnSceneLoad = function (view, scene) {
         if (Number(view) === 0) {
             ExtensionWindow.getInstance().emit('scene-load', Number(scene));
         }
     };
+    window.SourcesListHighlight = function (view, id) {
+        if (view === 0) {
+            ExtensionWindow.getInstance().emit('sources-list-highlight', id === '' ?
+                null : id);
+        }
+    };
+    window.SourcesListSelect = function (view, id) {
+        if (view === 0) {
+            ExtensionWindow.getInstance().emit('sources-list-select', id === '' ?
+                null : id);
+        }
+    };
 }
-},{"../core/environment":3,"../internal/app":17,"../util/eventemitter":31}],38:[function(require,module,exports){
+},{"../core/environment":4,"../internal/app":37,"../internal/internal":40,"../util/eventemitter":56}],63:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -6082,6 +11069,7 @@ var __extends = (this && this.__extends) || function (d, b) {
     __.prototype = b.prototype;
     d.prototype = new __();
 };
+var global_1 = require('../internal/global');
 var environment_1 = require('../core/environment');
 var eventemitter_1 = require('../util/eventemitter');
 /** This utility class is used internally by the framework for certain important
@@ -6090,10 +11078,11 @@ var eventemitter_1 = require('../util/eventemitter');
  *
  * Inherits from: {@link #util/EventEmitter Util/EventEmitter}
  *
- *  Currently there are only two events:
+ *  Currently there are only four events:
  *    - `save-config`: signals the source that it should save the configuration object. Handler is a function f(config: JSON)
  *    - `apply-config`: signals the source that it should apply the changes that this configuration object describes. Handler is a function f(config: JSON)
  *    - `set-background-color`: only used when the native Color tab is reused and background color is set. Handler is a function f(colorHexNoNumberSign: string)
+ *    - `scene-load`: signals the source that the active scene is the scene where it is loaded. Only works on sources loaded in memory
  *
  *  Use the `on(event: string, handler: Function)` function to listen to an event.
  */
@@ -6107,10 +11096,10 @@ var SourcePluginWindow = (function (_super) {
         this.on('message-source', function (message) {
             if (message.request !== undefined) {
                 if (message.request === 'saveConfig') {
-                    this.emit('save-config', message.data);
+                    this.emit('save-config', this._hideGlobalConfig(message.data));
                 }
                 else if (message.request === 'applyConfig') {
-                    this.emit('apply-config', message.data);
+                    this.emit('apply-config', this._hideGlobalConfig(message.data));
                 }
             }
         });
@@ -6124,6 +11113,22 @@ var SourcePluginWindow = (function (_super) {
             SourcePluginWindow._instance = new SourcePluginWindow();
         }
         return SourcePluginWindow._instance;
+    };
+    // We modify the configuration sent from the source properties window
+    // so that we do not see 'persistent' configuration such as config-url.
+    // When saving, this is restored back to the config object through
+    // Item#saveConfig().
+    //
+    // Note that we could have chosen to hide this from Item#requestSaveConfig()
+    // or Item#applyConfig() calls, but unfortunately, the context of the source
+    // properties window cannot always correctly determine the global config nodes
+    // when dealing with sources other than the current source (right-clicked.)
+    SourcePluginWindow.prototype._hideGlobalConfig = function (data) {
+        var persist = global_1.Global.getPersistentConfig();
+        for (var key in persist) {
+            delete data[key];
+        }
+        return data;
     };
     return SourcePluginWindow;
 })(eventemitter_1.EventEmitter);
@@ -6147,8 +11152,11 @@ if (environment_1.Environment.isSourcePlugin()) {
     window.setBackGroundColor = function (color) {
         SourcePluginWindow.getInstance().emit('set-background-color', color);
     };
+    window.OnSceneLoad = function () {
+        SourcePluginWindow.getInstance().emit('scene-load');
+    };
 }
-},{"../core/environment":3,"../util/eventemitter":31}],"xjs":[function(require,module,exports){
+},{"../core/environment":4,"../internal/global":38,"../util/eventemitter":56}],"xjs":[function(require,module,exports){
 function __export(m) {
     for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
 }
@@ -6161,24 +11169,51 @@ __export(require('./core/app'));
 __export(require('./core/channel'));
 __export(require('./core/scene'));
 __export(require('./core/transition'));
-__export(require('./core/item/item'));
-__export(require('./core/item/camera'));
-__export(require('./core/item/game'));
-__export(require('./core/item/audio'));
-__export(require('./core/item/html'));
-var ichroma_1 = require('./core/item/ichroma');
+__export(require('./core/dll'));
+__export(require('./core/extension'));
+__export(require('./core/source/source'));
+__export(require('./core/source/camera'));
+__export(require('./core/source/game'));
+__export(require('./core/source/audio'));
+__export(require('./core/source/html'));
+__export(require('./core/source/flash'));
+__export(require('./core/source/screen'));
+__export(require('./core/source/image'));
+__export(require('./core/source/media'));
+__export(require('./core/source/videoplaylist'));
+__export(require('./core/items/item'));
+__export(require('./core/items/camera'));
+__export(require('./core/items/game'));
+__export(require('./core/items/audio'));
+__export(require('./core/items/html'));
+__export(require('./core/items/flash'));
+__export(require('./core/items/screen'));
+__export(require('./core/items/image'));
+__export(require('./core/items/media'));
+__export(require('./core/items/videoplaylist'));
+var ieffects_1 = require('./core/items/ieffects');
+exports.MaskEffect = ieffects_1.MaskEffect;
+var ichroma_1 = require('./core/items/ichroma');
 exports.KeyingType = ichroma_1.KeyingType;
 exports.ChromaPrimaryColors = ichroma_1.ChromaPrimaryColors;
 exports.ChromaAntiAliasLevel = ichroma_1.ChromaAntiAliasLevel;
+var iplayback_1 = require('./core/items/iplayback');
+exports.ActionAfterPlayback = iplayback_1.ActionAfterPlayback;
+var cuepoint_1 = require('./core/items/cuepoint');
+exports.CuePoint = cuepoint_1.CuePoint;
 __export(require('./system/system'));
 __export(require('./system/audio'));
 __export(require('./system/game'));
 __export(require('./system/camera'));
 __export(require('./system/microphone'));
+__export(require('./system/url'));
+__export(require('./system/screen'));
+__export(require('./system/file'));
+__export(require('./system/videoplaylist'));
 __export(require('./window/config'));
 __export(require('./window/source'));
 __export(require('./window/extension'));
 __export(require('./window/dialog'));
 var ready_1 = require('./util/ready');
 exports.ready = ready_1.ready;
-},{"./core/app":1,"./core/channel":2,"./core/environment":3,"./core/item/audio":4,"./core/item/camera":5,"./core/item/game":6,"./core/item/html":7,"./core/item/ichroma":9,"./core/item/item":13,"./core/scene":15,"./core/transition":16,"./internal/init":19,"./system/audio":25,"./system/camera":26,"./system/game":27,"./system/microphone":28,"./system/system":29,"./util/color":30,"./util/io":32,"./util/ready":33,"./util/rectangle":34,"./window/config":35,"./window/dialog":36,"./window/extension":37,"./window/source":38}]},{},["xjs"]);
+},{"./core/app":1,"./core/channel":2,"./core/dll":3,"./core/environment":4,"./core/extension":5,"./core/items/audio":6,"./core/items/camera":7,"./core/items/cuepoint":8,"./core/items/flash":9,"./core/items/game":10,"./core/items/html":11,"./core/items/ichroma":13,"./core/items/ieffects":16,"./core/items/image":18,"./core/items/iplayback":19,"./core/items/item":20,"./core/items/media":22,"./core/items/screen":23,"./core/items/videoplaylist":24,"./core/scene":25,"./core/source/audio":26,"./core/source/camera":27,"./core/source/flash":28,"./core/source/game":29,"./core/source/html":30,"./core/source/image":31,"./core/source/media":32,"./core/source/screen":33,"./core/source/source":34,"./core/source/videoplaylist":35,"./core/transition":36,"./internal/init":39,"./system/audio":46,"./system/camera":47,"./system/file":48,"./system/game":49,"./system/microphone":50,"./system/screen":51,"./system/system":52,"./system/url":53,"./system/videoplaylist":54,"./util/color":55,"./util/io":57,"./util/ready":58,"./util/rectangle":59,"./window/config":60,"./window/dialog":61,"./window/extension":62,"./window/source":63}]},{},["xjs"]);
