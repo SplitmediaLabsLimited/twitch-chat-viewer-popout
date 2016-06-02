@@ -11,9 +11,9 @@
   var sourceWindow = xjs.SourcePluginWindow.getInstance();
 
   xjs.ready()
-  .then(Item.getCurrentSource)
+  .then(Item.getItemList)
   .then(function(item) {
-    myItem = item;
+    myItem = item[0];
     return myItem.getName();
   })
   .then(function(name) {
