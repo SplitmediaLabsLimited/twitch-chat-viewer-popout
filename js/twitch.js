@@ -8,12 +8,16 @@
   var Item = xjs.Item;
   var configObj = {};
   var myItem;
-  var sourceWindow = xjs.SourcePluginWindow.getInstance();
+  var sourceWindow
 
   xjs.ready()
-  .then(Item.getItemList)
+  .then(function () {
+    sourceWindow = xjs.SourcePluginWindow.getInstance();
+    return Item.getItemList()
+  })
   .then(function(item) {
     myItem = item[0];
+    listenOnSave()
     return myItem.getName();
   })
   .then(function(name) {
@@ -23,14 +27,14 @@
       return myItem.setName('Twitch Chat Viewer via HTML5');
     }
     else {
-      return myItem.setName(name); 
+      return myItem.setName(name);
     }
   })
   .then(function() {
     // inject minified script from scriptInjected.js
     var indexLocation = location.href;
     var indexPath = indexLocation.substring(0, indexLocation.length - 10);
-    return myItem.setBrowserJS('(function(){var existingXJS=document.getElementById("xjsInject"),xjs,Item,configObj={},sourceWindow;if(!document.getElementById("xjsInject")){var xjsScript=document.createElement("script");xjsScript.id="xjsInject";var body=document.querySelector("body");body.appendChild(xjsScript),xjsScript.onload=function(){xjs=require("xjs"),Item=xjs.Item,xjs.ready().then(Item.getCurrentSource).then(function(n){myItem=n}),sourceWindow=xjs.SourcePluginWindow.getInstance(),sourceWindow.on("save-config",function(n){configObj=n,Item.getCurrentSource().then(function(n){n.saveConfig(configObj).then(function(){var t=location.href,e=t.substring(21,t.length-13);configObj.hasOwnProperty("channel")&&""!=configObj.channel&&configObj.channel!=e&&n.setName("Twitch Chat Viewer via HTML5 ("+configObj.channel+")").then(function(){location.href="http://www.twitch.tv/"+configObj.channel+"/chat?popout="})})})})},xjsScript.src="' + indexPath +'js/xjs.js"}})();');
+    return myItem.setBrowserJS('(function(){var existingXJS=document.getElementById("xjsInject"),xjs,Source,configObj={},sourceWindow;if(!document.getElementById("xjsInject")){var xjsScript=document.createElement("script");xjsScript.id="xjsInject";var body=document.querySelector("body");body.appendChild(xjsScript),xjsScript.onload=function(){xjs=require("xjs"),Source=xjs.Source,xjs.ready().then(Source.getCurrentSource).then(function(n){myItem=n}),sourceWindow=xjs.SourcePluginWindow.getInstance(),sourceWindow.on("save-config",function(n){configObj=n,Source.getCurrentSource().then(function(n){n.saveConfig(configObj).then(function(){var t=location.href,e=t.substring(21,t.length-13);configObj.hasOwnProperty("channel")&&""!=configObj.channel&&configObj.channel!=e&&n.setName("Twitch Chat Viewer via HTML5 ("+configObj.channel+")").then(function(){location.href="http://www.twitch.tv/"+configObj.channel+"/chat?popout="})})})})},xjsScript.src="' + indexPath +'js/xjs.js"}})();');
   })
   .then(function() {
     return myItem.loadConfig();
@@ -44,16 +48,18 @@
   });
 
   // redirect from initial UI into twitch popout if channel is set
-  sourceWindow.on('save-config', function(config) {
-    configObj = config;
-    myItem.saveConfig(configObj).then(function() {
-      if (configObj.hasOwnProperty('channel') && configObj.channel != '') {
-        myItem.setName('Twitch Chat Viewer via HTML5 (' + configObj.channel + ')')
-        .then(function() {
-          location.href = 'http://www.twitch.tv/' + configObj.channel + '/chat?popout=';
-        });
-      }
+  var listenOnSave = function () {
+    sourceWindow.on('save-config', function(config) {
+      configObj = config;
+      myItem.saveConfig(configObj).then(function() {
+        if (configObj.hasOwnProperty('channel') && configObj.channel != '') {
+          myItem.setName('Twitch Chat Viewer via HTML5 (' + configObj.channel + ')')
+          .then(function() {
+            location.href = 'http://www.twitch.tv/' + configObj.channel + '/chat?popout=';
+          });
+        }
+      });
     });
-  });
+  }
 
 })();

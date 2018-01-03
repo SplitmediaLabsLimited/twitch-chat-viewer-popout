@@ -1,3 +1,45 @@
+/**
+ * XSplit JS Framework
+ * version: 2.6.0
+ *
+ * XSplit Extensibility Framework and Plugin License
+ *
+ * Copyright (c) 2015, SplitmediaLabs Limited
+ * All rights reserved.
+ *
+ * Redistribution and use in source, minified or binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in minified or binary form must reproduce the above
+ *    copyright notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * 3. This software, in source, minified and binary forms, and any derivatives
+ *    hereof, may be used only with the purpose to extend the functionality of the
+ *    XSplit products, developed and published by SplitmediaLabs Limited. It may
+ *    specifically not be used for extending the functionality of any other software
+ *    products which enables live streaming and/or recording functions.
+ *
+ * 4. This software may not be used to circumvent paid feature restrictions for
+ *    free and personal licensees of the XSplit products.
+ *
+ * THIS SOFTWARE IS PROVIDED BY SPLITMEDIALABS LIMITED ''AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT
+ * SHALL SPLITMEDIALABS LIMITED BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+ * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
+ * OF SUCH DAMAGE.
+ *
+ */
+
+
 require=(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var app_1 = require('../internal/app');
@@ -8,6 +50,7 @@ var xml_1 = require('../internal/util/xml');
 var internal_1 = require('../internal/internal');
 var environment_1 = require('./environment');
 var transition_1 = require('./transition');
+var version_1 = require('../internal/util/version');
 var DEFAULT_SILENCE_DETECTION_THRESHOLD = 5;
 var DEFAULT_SILENCE_DETECTION_PERIOD = 1000;
 /**
@@ -48,7 +91,7 @@ var App = (function () {
      * });
      * ```
      */
-    App.prototype.getFrametime = function () {
+    App.prototype.getFrameTime = function () {
         return new Promise(function (resolve) {
             app_1.App.get('frametime').then(function (val) {
                 resolve(Number(val));
@@ -120,6 +163,7 @@ var App = (function () {
         return new Promise(function (resolve, reject) {
             var xbcPattern = /XSplit Broadcaster\s(.*?)\s/;
             var xbcMatch = navigator.appVersion.match(xbcPattern);
+            xbcMatch = xbcMatch || version_1.mockVersion.match(xbcPattern);
             if (xbcMatch !== null) {
                 resolve(xbcMatch[1]);
             }
@@ -590,7 +634,7 @@ var App = (function () {
     App.prototype.setPrimarySpeakerSystemEnabled = function (hwenabled) {
         return new Promise(function (resolve, reject) {
             if (hwenabled !== 0 && hwenabled !== 1 && hwenabled !== 255) {
-                reject(Error('Value can only 0, 1 or 255'));
+                reject(Error('Value can only be 0, 1 or 255'));
             }
             app_1.App.getAsList('microphonedev2').then(function (arr) {
                 var audioDevices = arr.map(function (val) {
@@ -974,7 +1018,7 @@ var App = (function () {
     App.prototype.clearBrowserCookies = function () {
         return new Promise(function (resolve, reject) {
             if (environment_1.Environment.isSourcePlugin()) {
-                reject(new Error('This method is not available to source plugins.'));
+                reject(Error('This method is not available to source plugins.'));
             }
             else {
                 internal_1.exec('CallHost', 'deletecookie:videoitemprop');
@@ -991,104 +1035,15 @@ var App = (function () {
      */
     App.prototype.getUserIdHash = function () {
         return new Promise(function (resolve) {
-            resolve(app_1.App.getGlobalProperty('userid'));
+            app_1.App.getGlobalProperty('userid').then(function (res) {
+                resolve(res);
+            });
         });
     };
     return App;
 })();
 exports.App = App;
-},{"../internal/app":38,"../internal/internal":41,"../internal/util/json":43,"../internal/util/xml":46,"../system/audio":47,"../util/rectangle":60,"./environment":5,"./transition":37}],2:[function(require,module,exports){
-var app_1 = require('../internal/app');
-var Channel = (function () {
-    /** Channel constructor (only used internally) */
-    function Channel(props) {
-        this._name = props.name;
-        this._stat = props.stat;
-        this._channel = props.channel;
-    }
-    /**
-     *  return: Promise<Channel[]>
-     *
-     *  Gets the list of currently active channels.
-     */
-    Channel.getActiveStreamChannels = function () {
-        return new Promise(function (resolve) {
-            app_1.App.getAsList('recstat').then(function (activeStreams) {
-                if (activeStreams.length === 0) {
-                    resolve([]);
-                }
-                else {
-                    var channels = [];
-                    for (var i = 0; i < activeStreams.length; ++i) {
-                        channels.push(new Channel({
-                            name: activeStreams[i]['name'],
-                            stat: activeStreams[i].children.filter(function (child) {
-                                return child.tag.toLowerCase() === 'stat';
-                            })[0],
-                            channel: activeStreams[i].children.filter(function (child) {
-                                return child.tag.toLowerCase() === 'channel';
-                            })[0]
-                        }));
-                    }
-                    resolve(channels);
-                }
-            });
-        });
-    };
-    /**
-     *  return: Promise<string>
-     *
-     *  Gets the name of the channel.
-     */
-    Channel.prototype.getName = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            resolve(_this._name);
-        });
-    };
-    /**
-     * return: Promise<number>
-     *
-     * Gets the number of frames dropped */
-    Channel.prototype.getStreamDrops = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            app_1.App.get('streamdrops:' + _this._name).then(function (val) {
-                var drops = val.split(','), dropped = Number(drops[0]) || 0;
-                resolve(dropped);
-            });
-        });
-    };
-    /**
-     * return: Promise<number>
-     *
-     * Gets the number of frames rendered  */
-    Channel.prototype.getStreamRenderedFrames = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            app_1.App.get('streamdrops:' + _this._name).then(function (val) {
-                var drops = val.split(','), rendered = Number(drops[1]) || 0;
-                resolve(rendered);
-            });
-        });
-    };
-    /**
-     * return: Promise<number>
-     *
-     * Gets the current duration of the stream in microseconds  */
-    Channel.prototype.getStreamTime = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            app_1.App.get('streamtime:' + _this._name).then(function (val) {
-                var duration = Number(val) / 10;
-                resolve(duration);
-            });
-        });
-    };
-    return Channel;
-})();
-exports.Channel = Channel;
-},{"../internal/app":38}],3:[function(require,module,exports){
+},{"../internal/app":49,"../internal/internal":53,"../internal/util/json":56,"../internal/util/version":59,"../internal/util/xml":60,"../system/audio":61,"../util/rectangle":74,"./environment":4,"./transition":48}],2:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 /// <reference path="../../defs/window.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
@@ -1098,7 +1053,8 @@ var __extends = (this && this.__extends) || function (d, b) {
     d.prototype = new __();
 };
 var eventemitter_1 = require('../util/eventemitter');
-var channel_1 = require('./channel');
+var eventmanager_1 = require('../internal/eventmanager');
+var streaminfo_1 = require('./streaminfo');
 var json_1 = require('../internal/util/json');
 var environment_1 = require('./environment');
 /**
@@ -1112,6 +1068,7 @@ var environment_1 = require('./environment');
  *  The following events are emitted.
  *    - `stream-start`
  *    - `stream-end`
+ *    - `recording-renamed`
  *
  *  Use the `on(event: string, handler: Function)` function to listen to events.
  *
@@ -1137,10 +1094,10 @@ var ChannelManager = (function (_super) {
     /**
      *  param: (event: string, handler: Function)
      *
-     *  Allows listening to events that this class emits. Currently there are two:
-     *  `stream-start` and `stream-end`.
+     *  Allows listening to events that this class emits. Currently there are three:
+     *  `stream-start`, `stream-end` and `recording-renamed`.
      *
-     *  Sample usage:
+     *  #### Usage:
      *
      * ```javascript
      * ChannelManager.on('stream-start', function(res) {
@@ -1153,9 +1110,9 @@ var ChannelManager = (function (_super) {
      */
     ChannelManager.on = function (event, handler) {
         var _this = this;
-        // ChannelManager._emitter.on(event, handler);
         if (environment_1.Environment.isSourceProps()) {
-            console.warn('Channel Manager class cannot be used on Source Properties');
+            console.warn('Channel Manager: stream-related events are not received' +
+                ' via the Source Properties');
         }
         ChannelManager._emitter.on(event, function (params) {
             try {
@@ -1166,15 +1123,25 @@ var ChannelManager = (function (_super) {
                     var statJSON;
                     var addedInfo = {};
                     if (event === 'stream-end') {
-                        statJSON = json_1.JSON.parse('<stat frmdropped="' +
-                            channelInfoObj['Dropped'] +
-                            '" frmcoded="' + channelInfoObj['NotDropped'] + '" />');
+                        channelInfoObj['Dropped'] = Number(channelInfoObj['Dropped']) || 0;
+                        channelInfoObj['NotDropped'] = Number(channelInfoObj['NotDropped']) || 0;
+                        channelInfoObj['StreamTime'] = Number(channelInfoObj['StreamTime'] / 10) || 0;
+                        channelInfoObj['Audio'] = Number(channelInfoObj['Audio']) || 0;
+                        channelInfoObj['Video'] = Number(channelInfoObj['Video']) || 0;
+                        channelInfoObj['Output'] = Number(channelInfoObj['Output']) || 0;
+                        statJSON = json_1.JSON.parse('<stat' +
+                            ' video="' + channelInfoObj['Video'] +
+                            '" audio="' + channelInfoObj['Audio'] +
+                            '" output="' + channelInfoObj['Output'] +
+                            '" frmdropped="' + channelInfoObj['Dropped'] +
+                            '" frmcoded="' + channelInfoObj['NotDropped'] +
+                            '" />');
                         addedInfo['streamTime'] = channelInfoObj['StreamTime'];
                     }
                     else if (event === 'stream-start') {
                         statJSON = json_1.JSON.parse('<stat />');
                     }
-                    var eventChannel = new channel_1.Channel({
+                    var eventChannel = new streaminfo_1.StreamInfo({
                         name: channelName,
                         stat: statJSON,
                         channel: infoJSON
@@ -1185,6 +1152,22 @@ var ChannelManager = (function (_super) {
                         streamTime: addedInfo['streamTime']
                     });
                 }
+                else if (channelInfoObj.hasOwnProperty('new') &&
+                    channelInfoObj.hasOwnProperty('old')) {
+                    if (event === 'recording-renamed') {
+                        var name_1 = decodeURIComponent(channelInfoObj['new']).replace(/\\/g, "/");
+                        var nameArr = name_1.split('/');
+                        var newName = nameArr[nameArr.length - 1];
+                        handler.call(_this, {
+                            error: false,
+                            recordingInfo: {
+                                oldName: channelInfoObj['old'],
+                                newName: newName,
+                                fullPath: decodeURIComponent(channelInfoObj['new'])
+                            }
+                        });
+                    }
+                }
             }
             catch (e) {
                 handler.call(_this, { error: true });
@@ -1192,30 +1175,41 @@ var ChannelManager = (function (_super) {
         });
     };
     ChannelManager._emitter = new ChannelManager();
+    ChannelManager._proxyCallbacks = {};
+    ChannelManager._remoteCallbacks = {};
     return ChannelManager;
 })(eventemitter_1.EventEmitter);
 exports.ChannelManager = ChannelManager;
-window.SetEvent = function (args) {
-    var settings = [];
-    settings = args.split('&');
-    var settingsObj = {};
-    settings.map(function (el) {
-        var _split = el.split('=');
-        settingsObj[_split[0]] = _split[1];
+function _subscribeEventManager() {
+    eventmanager_1.EventManager.subscribe(['StreamStart', 'StreamEnd', 'RecordingRenamed'], function (settingsObj) {
+        var eventString;
+        if (settingsObj.hasOwnProperty('event') &&
+            settingsObj.hasOwnProperty('info')) {
+            eventString = settingsObj['event'];
+            if (settingsObj['event'] === 'StreamStart') {
+                eventString = 'stream-start';
+            }
+            else if (settingsObj['event'] === 'StreamEnd') {
+                eventString = 'stream-end';
+            }
+            ChannelManager.emit(eventString, settingsObj['info']);
+        }
+        if (settingsObj.hasOwnProperty('event') && settingsObj.hasOwnProperty('old')
+            && settingsObj.hasOwnProperty('new')) {
+            eventString = settingsObj['event'];
+            if (settingsObj['event'] === 'RecordingRenamed') {
+                eventString = 'recording-renamed';
+                var renameInfo = {
+                    old: settingsObj['old'],
+                    new: settingsObj['new']
+                };
+                ChannelManager.emit(eventString, encodeURIComponent(JSON.stringify(renameInfo)));
+            }
+        }
     });
-    if (settingsObj.hasOwnProperty('event') &&
-        settingsObj.hasOwnProperty('info')) {
-        var eventString = settingsObj['event'];
-        if (settingsObj['event'] === 'StreamStart') {
-            eventString = 'stream-start';
-        }
-        else if (settingsObj['event'] === 'StreamEnd') {
-            eventString = 'stream-end';
-        }
-        ChannelManager.emit(eventString, settingsObj['info']);
-    }
-};
-},{"../internal/util/json":43,"../util/eventemitter":57,"./channel":2,"./environment":5}],4:[function(require,module,exports){
+}
+exports._subscribeEventManager = _subscribeEventManager;
+},{"../internal/eventmanager":50,"../internal/util/json":56,"../util/eventemitter":71,"./environment":4,"./streaminfo":47}],3:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -1225,6 +1219,7 @@ var __extends = (this && this.__extends) || function (d, b) {
 };
 var internal_1 = require('../internal/internal');
 var eventemitter_1 = require('../util/eventemitter');
+var window_1 = require('../util/window');
 /**
  *  The Dll class allows access to functions in DLL files that are placed within
  *  the Scriptdlls folder.
@@ -1237,7 +1232,12 @@ var eventemitter_1 = require('../util/eventemitter');
  *    - `access-granted`
  *    - `access-revoked`
  *
+ *
  *  Use the `on(event: string, handler: Function)` function to listen to events.
+ *
+ *  For more detailed information about using DLLs in XSplit, please see the
+ *  {@link tutorials.html#/dll DLL tutorial}. That link also includes a list of
+ *  methods exposed by the DLLs that ship with XSplit.
  *
  */
 var Dll = (function (_super) {
@@ -1260,20 +1260,11 @@ var Dll = (function (_super) {
      *  ```
      */
     Dll.load = function (path) {
-        internal_1.exec('LoadDll', path.join(','));
-    };
-    /**
-     *  param: (event: string, ...params: any[])
-     *
-     *  Allows this class to emit an event.
-     */
-    Dll.emit = function (event) {
-        var params = [];
-        for (var _i = 1; _i < arguments.length; _i++) {
-            params[_i - 1] = arguments[_i];
-        }
-        params.unshift(event);
-        Dll._emitter.emit.apply(Dll._emitter, params);
+        return new Promise(function (resolve) {
+            internal_1.exec('LoadDll', path.join(',')).then(function (result) {
+                resolve(result);
+            });
+        });
     };
     /**
      *  param: (event: string, handler: Function)
@@ -1285,9 +1276,22 @@ var Dll = (function (_super) {
         Dll._emitter.on(event, handler);
     };
     /**
+     *  param: (event: string, ...params: any[])
+     *
+     *  Allows this class to emit an event. Generally only useful for testing.
+     */
+    Dll.emit = function (event) {
+        var params = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            params[_i - 1] = arguments[_i];
+        }
+        params.unshift(event);
+        Dll._emitter.emit.apply(Dll._emitter, params);
+    };
+    /**
      *  param: (funcName: string, ...params: string[])
      *
-     *  return: string (see DLL documentation)
+     *  return: Promise<string> (see {@link tutorials.html#/dll DLL documentation})
      *
      *  Calls a function from a loaded "safe" DLL. The only safe DLL we are
      *  currently exposing is `Xjs.dll`.
@@ -1302,26 +1306,29 @@ var Dll = (function (_super) {
             var funcCall = 'CallDll';
             params.unshift(func);
             params.unshift(funcCall);
-            var retValue = internal_1.exec.apply(_this, params);
-            if (retValue !== undefined) {
-                resolve(retValue);
-            }
-            else {
-                reject('DLL call not accessible.');
-            }
+            internal_1.exec.apply(_this, params)
+                .then(function (retValue) {
+                if (retValue !== undefined) {
+                    resolve(retValue);
+                }
+                else {
+                    reject(Error('DLL call not accessible.'));
+                }
+            });
         });
     };
     /**
      *  param: (funcName: string, ...params: string[])
      *
-     *  return: string (see DLL documentation)
+     *  return: Promise<string> (see {@link tutorials.html#/dll DLL documentation})
      *
      *  Calls a function from a loaded "unsafe" DLL. The first DLL containing
      *  the function name will be called, so you need to ensure there are no
      *  function name collisions among DLLs for functions you require.
      *
      *  Some DLLs have callbacks. Assign a handler function to that callback in
-     *  the global namespace, and the DLL will call that function accordingly.
+     *  the global namespace (`window.callbackName = ...`), and the DLL will call
+     *  that function accordingly.
      *
      *  See the documentation of your specific DLL for more details.
      */
@@ -1335,31 +1342,36 @@ var Dll = (function (_super) {
             var funcCall = 'CallDllEx';
             params.unshift(func);
             params.unshift(funcCall);
-            var retValue = internal_1.exec.apply(_this, params);
-            if (retValue !== undefined) {
-                resolve(retValue);
-            }
-            else {
-                reject('DLL call not accessible.');
-            }
+            internal_1.exec.apply(_this, params)
+                .then(function (retValue) {
+                if (retValue !== undefined) {
+                    resolve(retValue);
+                }
+                else {
+                    reject(Error('DLL call not accessible.'));
+                }
+            });
         });
     };
     /**
      *  return: Promise<boolean>
      *
-     *  Determines if user has granted DLL access for this plugin, or whether
-     *  DLL security is disabled altogether.
+     *  Determines if user has granted DLL access for this plugin. This also
+     *  resolves to true if DLL security is disabled altogether.
      */
     Dll.isAccessGranted = function () {
         return new Promise(function (resolve) {
-            resolve(internal_1.exec('CheckDllGrant') === '1');
+            internal_1.exec('CheckDllGrant').then(function (result) {
+                resolve(result === '1');
+            });
         });
     };
     Dll._emitter = new Dll();
     return Dll;
 })(eventemitter_1.EventEmitter);
 exports.Dll = Dll;
-window.UpdateLocalProperty = function (prop, value) {
+var oldUpdateLocalProperty = window_1.default.UpdateLocalProperty;
+window_1.default.UpdateLocalProperty = function (prop, value) {
     if (prop === 'prop:dlldogrant') {
         var granted = value === '1';
         if (granted) {
@@ -1369,8 +1381,12 @@ window.UpdateLocalProperty = function (prop, value) {
             Dll.emit('access-revoked');
         }
     }
+    if (typeof oldUpdateLocalProperty === 'function') {
+        oldUpdateLocalProperty(prop, value);
+    }
 };
-window.Setdlldogrant = function (value) {
+var oldSetdlldogrant = window_1.default.Setdlldogrant;
+window_1.default.Setdlldogrant = function (value) {
     var granted = value === '1';
     if (granted) {
         Dll.emit('access-granted');
@@ -1378,8 +1394,13 @@ window.Setdlldogrant = function (value) {
     else {
         Dll.emit('access-revoked');
     }
+    if (typeof oldSetdlldogrant === 'function') {
+        oldSetdlldogrant(value);
+    }
 };
-},{"../internal/internal":41,"../util/eventemitter":57}],5:[function(require,module,exports){
+},{"../internal/internal":53,"../util/eventemitter":71,"../util/window":75}],4:[function(require,module,exports){
+var remote_1 = require('../internal/remote');
+var window_1 = require('../util/window');
 /**
  * This class allows detection of the context in which the HTML is located.
  */
@@ -1393,16 +1414,16 @@ var Environment = (function () {
         if (Environment._initialized) {
             return;
         }
-        Environment._isSourcePlugin = (window.external &&
-            window.external['GetConfiguration'] !== undefined);
-        Environment._isSourceProps = (window.external &&
-            window.external['GetConfiguration'] === undefined &&
-            window.external['GetViewId'] !== undefined &&
-            window.external['GetViewId']() !== undefined);
-        Environment._isExtension = (window.external &&
-            window.external['GetConfiguration'] === undefined &&
-            window.external['GetViewId'] !== undefined &&
-            window.external['GetViewId']() === undefined);
+        Environment._isSourcePlugin = (window_1.default.external &&
+            window_1.default.external['GetConfiguration'] !== undefined);
+        Environment._isSourceProps = (window_1.default.external &&
+            window_1.default.external['GetConfiguration'] === undefined &&
+            window_1.default.external['GetViewId'] !== undefined &&
+            window_1.default.external['GetViewId']() !== undefined);
+        Environment._isExtension = (window_1.default.external &&
+            window_1.default.external['GetConfiguration'] === undefined &&
+            window_1.default.external['GetViewId'] !== undefined &&
+            window_1.default.external['GetViewId']() === undefined);
         Environment._initialized = true;
     };
     /**
@@ -1412,18 +1433,6 @@ var Environment = (function () {
      */
     Environment.isSourcePlugin = function () {
         return Environment._isSourcePlugin;
-    };
-    /**
-     * return: boolean
-     *
-     * > #### For Deprecation
-     * This method is deprecated and will be removed soon. Please use
-     * {@link #core/Environment#isSourceProps isSourceProps} instead.
-     *
-     * Determines if this HTML is running within the source properties window.
-     */
-    Environment.isSourceConfig = function () {
-        return Environment._isSourceProps;
     };
     /**
      * return: boolean
@@ -1439,20 +1448,27 @@ var Environment = (function () {
      * Determines if this HTML is running as an extension plugin.
      */
     Environment.isExtension = function () {
-        return Environment._isExtension;
+        if (remote_1.Remote.remoteType === 'remote') {
+            return true;
+        }
+        else {
+            return Environment._isExtension;
+        }
     };
     return Environment;
 })();
 exports.Environment = Environment;
-Environment.initialize();
-},{}],6:[function(require,module,exports){
+},{"../internal/remote":55,"../util/window":75}],5:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var environment_1 = require('../core/environment');
 var internal_1 = require('../internal/internal');
+var app_1 = require('../internal/app');
+var remote_1 = require('../internal/remote');
+var window_1 = require('../util/window');
 var Extension = (function () {
     function Extension() {
         if (environment_1.Environment.isExtension()) {
-            this._presName = window.location.href;
+            this._presName = window_1.default.location.href;
         }
         else {
             throw new Error('Extension class can only be used on Extension Plugins');
@@ -1465,6 +1481,9 @@ var Extension = (function () {
         if (Extension._instance === undefined) {
             Extension._instance = new Extension();
         }
+        Extension._instance.getId().then(function (id) {
+            Extension._instance._id = String(id);
+        });
         return Extension._instance;
     };
     /**
@@ -1479,8 +1498,9 @@ var Extension = (function () {
         var _this = this;
         return new Promise(function (resolve, reject) {
             if ({}.toString.call(configObj) === '[object Object]') {
-                internal_1.exec('SetPresProperty', _this._presName, JSON.stringify(configObj));
-                resolve(_this);
+                internal_1.exec('SetPresProperty', _this._presName, JSON.stringify(configObj)).then(function (result) {
+                    resolve(_this);
+                });
             }
             else {
                 reject(Error('Configuration object should be in JSON format'));
@@ -1501,10 +1521,64 @@ var Extension = (function () {
             });
         });
     };
+    /**
+     *  return: Promise<string>
+     *
+     *  Get the extension id.
+     */
+    Extension.prototype.getId = function (handler) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._id === undefined) {
+                if (remote_1.Remote.remoteType === 'remote') {
+                    var message = {
+                        type: 'extWindow',
+                        instance: Extension._instance
+                    };
+                    Extension._remoteCallback['ExtensionWindowID'] = ({ resolve: resolve });
+                    remote_1.Remote.sendMessage(encodeURIComponent(JSON.stringify(message)));
+                }
+                else if (remote_1.Remote.remoteType === 'proxy') {
+                    Extension._proxyCallback['ExtensionWindowID'] = handler;
+                    app_1.App.postMessage("8");
+                }
+                else {
+                    Extension._callback['ExtensionWindowID'] = ({ resolve: resolve });
+                    app_1.App.postMessage("8");
+                }
+            }
+            else {
+                resolve(_this._id);
+            }
+        });
+    };
+    Extension._finalCallback = function (message) {
+        return new Promise(function (resolve) {
+            var result = JSON.parse(decodeURIComponent(message));
+            Extension._remoteCallback['ExtensionWindowID'].resolve(result['result']);
+        });
+    };
+    Extension._proxyCallback = {};
+    Extension._remoteCallback = {};
+    Extension._callback = {};
     return Extension;
 })();
 exports.Extension = Extension;
-},{"../core/environment":5,"../internal/internal":41}],7:[function(require,module,exports){
+var oldSetid = window_1.default.Setid;
+window_1.default.Setid = function (id) {
+    if (remote_1.Remote.remoteType === 'proxy') {
+        if (Extension._proxyCallback['ExtensionWindowID'] === undefined)
+            return;
+        Extension._proxyCallback['ExtensionWindowID'].call(this, id);
+    }
+    else {
+        Extension._callback['ExtensionWindowID'].resolve(id);
+    }
+    if (typeof oldSetid === 'function') {
+        oldSetid(id);
+    }
+};
+},{"../core/environment":4,"../internal/app":49,"../internal/internal":53,"../internal/remote":55,"../util/window":75}],6:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -1513,16 +1587,16 @@ var __extends = (this && this.__extends) || function (d, b) {
     d.prototype = new __();
 };
 var mixin_1 = require('../../internal/util/mixin');
-var item_1 = require('../../internal/item');
-var iaudio_1 = require('./iaudio');
-var item_2 = require('./item');
+var iaudio_1 = require('../source/iaudio');
+var iaudiosource_1 = require('../source/iaudiosource');
+var item_1 = require('./item');
 /**
  * The AudioItem class represents an audio device that has been added
  * to the stage.
  *
  * Inherits from: {@link #core/Item Core/Item}
  *
- * Implements: {@link #core/IItemAudio Core/IItemAudio}
+ * Implements: {@link #core/IAudio Core/IAudio}
  *
  * ### Basic Usage
  *
@@ -1549,150 +1623,11 @@ var AudioItem = (function (_super) {
     function AudioItem() {
         _super.apply(this, arguments);
     }
-    /**
-     * return: Promise<boolean>
-     *
-     * Check if silence detection is on or off
-     */
-    AudioItem.prototype.isSilenceDetectionEnabled = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:AudioGainEnable', _this._id).then(function (val) {
-                resolve(val === '1');
-            });
-        });
-    };
-    /**
-     * param: (value: boolean)
-     *
-     * Set silence detection to ON or OFF
-     *
-     * *Chainable.*
-     */
-    AudioItem.prototype.setSilenceDetectionEnabled = function (value) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            item_1.Item.set('prop:AudioGainEnable', (value ? '1' : '0'), _this._id)
-                .then(function (res) {
-                resolve(_this);
-            });
-        });
-    };
-    /**
-     * return: Promise<number>
-     *
-     * Gets silenced detection threshold.
-     * Amplitude less than threshold will be detected as silence.
-     */
-    AudioItem.prototype.getSilenceThreshold = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:AudioGain', _this._id).then(function (val) {
-                resolve(Number(val));
-            });
-        });
-    };
-    /**
-     * param: (value: number)
-     *
-     * Sets silence detection threshold, min of 0, max of 128
-     *
-     * *Chainable.*
-     */
-    AudioItem.prototype.setSilenceThreshold = function (value) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            if (typeof value !== 'number') {
-                reject(Error('Only numbers are acceptable values for threshold'));
-            }
-            else if (value % 1 !== 0 || value < 0 || value > 128) {
-                reject(Error('Only integers in the range 0-128 are acceptable for threshold'));
-            }
-            else {
-                item_1.Item.set('prop:AudioGain', String(value), _this._id).then(function (res) {
-                    resolve(_this);
-                });
-            }
-        });
-    };
-    /**
-     * return: Promise<number>
-     *
-     * Gets silenced detection period in ms time unit.
-     * Reaction time before filter removes noice/sound less than threshold
-     */
-    AudioItem.prototype.getSilencePeriod = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:AudioGainLatency', _this._id).then(function (val) {
-                resolve(Number(val));
-            });
-        });
-    };
-    /**
-     * param: (value: number)
-     *
-     * Sets silence detection period, min of 0, max of 10000
-     *
-     * *Chainable.*
-     */
-    AudioItem.prototype.setSilencePeriod = function (value) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            if (typeof value !== 'number') {
-                reject(Error('Only numbers are acceptable values for period'));
-            }
-            else if (value % 1 !== 0 || value < 0 || value > 10000) {
-                reject(Error('Only integers in the range 0-10000 are acceptable for period'));
-            }
-            else {
-                item_1.Item.set('prop:AudioGainLatency', String(value), _this._id).then(function (res) {
-                    resolve(_this);
-                });
-            }
-        });
-    };
-    /**
-     * return: Promise<number>
-     *
-     * Gets audio delay (1 unit = 100ns)
-     */
-    AudioItem.prototype.getAudioOffset = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:AudioDelay', _this._id).then(function (val) {
-                resolve(Number(val));
-            });
-        });
-    };
-    /**
-     * param: (value: number)
-     *
-     * Sets audio delay, accepts only positive delay
-     *
-     * *Chainable.*
-     */
-    AudioItem.prototype.setAudioOffset = function (value) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            if (typeof value !== 'number') {
-                reject(Error('Only numbers are acceptable values for period'));
-            }
-            else if (value < 0) {
-                reject(Error('Audio offset cannot be negative'));
-            }
-            else {
-                item_1.Item.set('prop:AudioDelay', String(value), _this._id).then(function (res) {
-                    resolve(_this);
-                });
-            }
-        });
-    };
     return AudioItem;
-})(item_2.Item);
+})(item_1.Item);
 exports.AudioItem = AudioItem;
-mixin_1.applyMixins(AudioItem, [iaudio_1.ItemAudio]);
-},{"../../internal/item":42,"../../internal/util/mixin":44,"./iaudio":13,"./item":21}],8:[function(require,module,exports){
+mixin_1.applyMixins(AudioItem, [iaudiosource_1.SourceAudio, iaudio_1.Audio]);
+},{"../../internal/util/mixin":58,"../source/iaudio":30,"../source/iaudiosource":31,"./item":16}],7:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -1707,9 +1642,9 @@ var icolor_1 = require('./icolor');
 var ichroma_1 = require('./ichroma');
 var ieffects_1 = require('./ieffects');
 var itransition_1 = require('./itransition');
-var iaudio_1 = require('./iaudio');
+var iaudio_1 = require('../source/iaudio');
 var item_2 = require('./item');
-var system_1 = require('../../system/system');
+var icamera_1 = require('../source/icamera');
 /**
  * The CameraItem Class provides methods specifically used for camera items and
  * also methods that are shared between Item Classes. The
@@ -1722,7 +1657,7 @@ var system_1 = require('../../system/system');
  * {@link #core/IItemColor Core/IItemColor},
  * {@link #core/IItemLayout Core/IItemLayout},
  * {@link #core/IItemTransition Core/IItemTransition},
- * {@link #core/IItemAudio Core/IItemAudio},
+ * {@link #core/IAudio Core/IAudio},
  * {@link #core/IItemEffect Core/IItemEffect}
  *
  * ### Basic Usage
@@ -1751,313 +1686,7 @@ var CameraItem = (function (_super) {
     __extends(CameraItem, _super);
     function CameraItem() {
         _super.apply(this, arguments);
-        this._delayExclusionObject = {
-            roxio: "vid_1b80&pid_e0(01|11|12)",
-            hauppauge1: "vid_2040&pid_49(0[0-3]|8[0-3])",
-            hauppauge2: "vid_2040&pid_e50[012a4]"
-        };
     }
-    /**
-     * return: Promise<string>
-     *
-     * Gets the device ID of the underlying camera device.
-     */
-    CameraItem.prototype.getDeviceId = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:item', _this._id).then(function (val) {
-                resolve(val);
-            });
-        });
-    };
-    /**
-     * return: Promise<boolean>
-     *
-     * Checks if camera feed is paused
-     */
-    CameraItem.prototype.isStreamPaused = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:StreamPause', _this._id).then(function (val) {
-                resolve(val === '1');
-            });
-        });
-    };
-    /**
-     * param: (value: boolean)
-     *
-     * Sets whether camera feed is paused or not
-     *
-     * *Chainable.*
-     */
-    CameraItem.prototype.setStreamPaused = function (value) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            item_1.Item.set('prop:StreamPause', value ? '1' : '0', _this._id).then(function () {
-                return item_1.Item.get('prop:StreamPause', _this._id);
-            }).then(function (val) {
-                if (value === (val === ('1'))) {
-                    resolve(_this);
-                }
-                else {
-                    reject(new Error('Camera feed cannot be paused/resumed or is not present'));
-                }
-            });
-        });
-    };
-    /**
-     * return: Promise<boolean>
-     *
-     * Checks if camera device is a hardware encoder or not. This check may fail
-     * if camera device is reinitializing or not present (value defaults to false)
-     *
-     */
-    CameraItem.prototype.isHardwareEncoder = function () {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            item_1.Item.get('prop:hwencoder', _this._id).then(function (val) {
-                if (val === '1') {
-                    resolve(true);
-                }
-                else {
-                    _this.isActive().then(function (isActive) {
-                        if (isActive) {
-                            resolve(false);
-                        }
-                        else {
-                            reject(new Error('Cannot check hardware encoding. Device not present'));
-                        }
-                    });
-                }
-            });
-        });
-    };
-    /**
-     * return: Promise<boolean>
-     *
-     * Checks if camera device is active and present.
-     *
-     */
-    CameraItem.prototype.isActive = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:activestate', _this._id).then(function (val) {
-                resolve(val === 'active');
-            });
-        });
-    };
-    /**
-     * return: Promise<number>
-     *
-     * Gets feed capture delay in milliseconds
-     */
-    CameraItem.prototype.getDelay = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            var streamDelay, audioDelay;
-            item_1.Item.get('prop:StreamDelay', _this._id).then(function (val) {
-                streamDelay = Number(val);
-                return item_1.Item.get('prop:AudioDelay', _this._id);
-            }).then(function (val) {
-                audioDelay = Number(val);
-                if (streamDelay < audioDelay) {
-                    resolve(streamDelay / 10000);
-                }
-                else {
-                    resolve(audioDelay / 10000);
-                }
-            });
-        });
-    };
-    /**
-     * param: (value: number)
-     *
-     * Sets feed capture delay in milliseconds, accepts only positive delay
-     *
-     * *Chainable.*
-     */
-    CameraItem.prototype.setDelay = function (value) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            var isPositive, audioOffset;
-            _this.isHardwareEncoder().then(function (val) {
-                if (val === true) {
-                    reject(new Error('Cannot set delay to hardware encoder devices'));
-                }
-                else {
-                    return _this.getValue();
-                }
-            }).then(function (val) {
-                for (var key in _this._delayExclusionObject) {
-                    var regex = new RegExp(_this._delayExclusionObject[key].toLowerCase(), 'g');
-                    if (typeof val === 'string' && val.toLowerCase().match(regex) != null) {
-                        reject(new Error('Cannot set delay to specific device'));
-                        break;
-                    }
-                }
-                return _this.getAudioOffset();
-            }).then(function (val) {
-                audioOffset = val;
-                if (audioOffset >= 0) {
-                    isPositive = true;
-                    return item_1.Item.set('prop:StreamDelay', String(value * 10000), _this._id);
-                }
-                else {
-                    isPositive = false;
-                    return item_1.Item.set('prop:StreamDelay', String((value + (audioOffset * -1)) * 10000), _this._id);
-                }
-            }).then(function (val) {
-                if (isPositive) {
-                    return item_1.Item.set('prop:AudioDelay', String((value + audioOffset) * 10000), _this._id);
-                }
-                else {
-                    return item_1.Item.set('prop:AudioDelay', String(value * 10000), _this._id);
-                }
-            }).then(function (val) {
-                resolve(_this);
-            });
-        });
-    };
-    /**
-     * return: Promise<number>
-     *
-     * Gets audio delay with respect to video feed in milliseconds
-     */
-    CameraItem.prototype.getAudioOffset = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            var streamDelay, audioDelay;
-            item_1.Item.get('prop:StreamDelay', _this._id).then(function (val) {
-                streamDelay = Number(val);
-                return item_1.Item.get('prop:AudioDelay', _this._id);
-            }).then(function (val) {
-                audioDelay = Number(val);
-                resolve((audioDelay - streamDelay) / 10000);
-            });
-        });
-    };
-    /**
-     * param: (value: number)
-     *
-     * Sets audio delay with respect to video feed in milliseconds
-     *
-     * *Chainable.*
-     */
-    CameraItem.prototype.setAudioOffset = function (value) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            var itemAudio, delay;
-            item_1.Item.get('prop:itemaudio', _this._id).then(function (val) {
-                itemAudio = val;
-                return _this.isAudioAvailable();
-            }).then(function (val) {
-                if (val === false && itemAudio === '') {
-                    reject(new Error('Device has no audio'));
-                }
-                else {
-                    return _this.getDelay();
-                }
-            }).then(function (val) {
-                delay = val;
-                if (value >= 0) {
-                    return item_1.Item.set('prop:StreamDelay', String(delay * 10000), _this._id);
-                }
-                else {
-                    return item_1.Item.set('prop:StreamDelay', String((delay + (value * -1)) * 10000), _this._id);
-                }
-            }).then(function (val) {
-                if (value >= 0) {
-                    return item_1.Item.set('prop:AudioDelay', String((delay + value) * 10000), _this._id);
-                }
-                else {
-                    return item_1.Item.set('prop:AudioDelay', String(delay * 10000), _this._id);
-                }
-            }).then(function (val) {
-                resolve(_this);
-            });
-        });
-    };
-    /**
-     * return: Promise<MicrophoneDevice>
-     *
-     * Gets the microphone device tied as an audio input,
-     * rejected if no microphone device is used
-     */
-    CameraItem.prototype.getAudioInput = function () {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            var itemAudioId;
-            item_1.Item.get('prop:itemaudio', _this._id).then(function (val) {
-                if (val === '') {
-                    reject(new Error('No tied audio input'));
-                }
-                else {
-                    itemAudioId = val;
-                    return system_1.System.getMicrophones();
-                }
-            }).then(function (val) {
-                var micDevice;
-                if (val !== undefined) {
-                    for (var i = 0; i < val.length; ++i) {
-                        if (val[i].getDisplayId() === itemAudioId) {
-                            micDevice = val[i];
-                            break;
-                        }
-                    }
-                }
-                if (micDevice !== undefined) {
-                    resolve(micDevice);
-                }
-                else {
-                    reject(new Error('Tied audio input not present'));
-                }
-            });
-        });
-    };
-    /**
-     * param: (value: number)
-     *
-     * Sets the microphone device to be tied as an audio input
-     *
-     * *Chainable.*
-     */
-    CameraItem.prototype.setAudioInput = function (value) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            item_1.Item.set('prop:itemaudio', value.getDisplayId(), _this._id)
-                .then(function (val) {
-                resolve(_this);
-            });
-        });
-    };
-    /**
-     * return: Promise<boolean>
-     *
-     * Checks whether deinterlacing is enforced
-     */
-    CameraItem.prototype.isForceDeinterlace = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:fdeinterlace', _this._id).then(function (val) {
-                resolve(val === '3');
-            });
-        });
-    };
-    /**
-     * param: (value: boolean)
-     *
-     * Enables or disables forcing of deinterlacing
-     *
-     * *Chainable.*
-     */
-    CameraItem.prototype.setForceDeinterlace = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:fdeinterlace', (value ? '3' : '0'), _this._id).then(function () {
-                resolve(_this);
-            });
-        });
-    };
     // special color options pinning
     /**
      * param: (value: boolean)
@@ -2123,75 +1752,9 @@ var CameraItem = (function (_super) {
     return CameraItem;
 })(item_2.Item);
 exports.CameraItem = CameraItem;
-mixin_1.applyMixins(CameraItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition,
-    iaudio_1.ItemAudio, ieffects_1.ItemEffect]);
-},{"../../internal/item":42,"../../internal/util/mixin":44,"../../system/system":53,"./iaudio":13,"./ichroma":14,"./icolor":15,"./ieffects":17,"./ilayout":18,"./item":21,"./itransition":22}],9:[function(require,module,exports){
-/**
- *  A CuePoint represents a configurable object for items that
- *  support cue points. Check `getCuePoints()` and other related methods of
- *  {@link #core/MediaItem#getCuePoints Core/MediaItem}.
- */
-var CuePoint = (function () {
-    function CuePoint(time, action) {
-        this._time = time;
-        this._action = action;
-    }
-    CuePoint.prototype.toString = function () {
-        return String(this._time * 10000000) + this._action;
-    };
-    /**
-     * param: number
-     *
-     * Sets this cue point's time in seconds, with precision up to 100ns.
-     */
-    CuePoint.prototype.setTime = function (time) {
-        this._time = time;
-    };
-    /**
-     *  param: string
-     *
-     *  Sets the action to be performed on the cue point. Choose any of the
-     *  following values: CuePoint.PAUSE, CuePoint.RESUME, CuePoint.CUT.
-     */
-    CuePoint.prototype.setAction = function (action) {
-        if (action === CuePoint.PAUSE || action === CuePoint.RESUME ||
-            action === CuePoint.CUT) {
-            this._action = action;
-        }
-        else {
-            throw new Error('Trying to set to an invalid Cue Point action.');
-        }
-    };
-    /**
-     * return: number
-     *
-     * Gets the time in seconds corresponding to this cue point, with precision
-     * up to 100ns.
-     */
-    CuePoint.prototype.getTime = function () {
-        return this._time / 10000000;
-    };
-    /**
-     *  return: string
-     *
-     *  Gets the action to be performed on the cue point, which may be any of the
-     *  following: CuePoint.PAUSE, CuePoint.RESUME, CuePoint.CUT.
-     */
-    CuePoint.prototype.getAction = function () {
-        return this._action;
-    };
-    CuePoint._fromString = function (value) {
-        var _a = [value.substring(0, value.length - 1),
-            value.charAt(value.length - 1)], time = _a[0], action = _a[1];
-        return new CuePoint(Number(time), action);
-    };
-    CuePoint.PAUSE = 'p';
-    CuePoint.RESUME = 'r';
-    CuePoint.CUT = 's';
-    return CuePoint;
-})();
-exports.CuePoint = CuePoint;
-},{}],10:[function(require,module,exports){
+mixin_1.applyMixins(CameraItem, [item_2.Item, ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition,
+    iaudio_1.Audio, ieffects_1.ItemEffect, icamera_1.SourceCamera]);
+},{"../../internal/item":54,"../../internal/util/mixin":58,"../source/iaudio":30,"../source/icamera":32,"./ichroma":11,"./icolor":12,"./ieffects":13,"./ilayout":14,"./item":16,"./itransition":17}],8:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -2200,15 +1763,14 @@ var __extends = (this && this.__extends) || function (d, b) {
     d.prototype = new __();
 };
 var mixin_1 = require('../../internal/util/mixin');
-var item_1 = require('../../internal/item');
 var ilayout_1 = require('./ilayout');
 var icolor_1 = require('./icolor');
 var ichroma_1 = require('./ichroma');
 var ieffects_1 = require('./ieffects');
 var itransition_1 = require('./itransition');
-var iaudio_1 = require('./iaudio');
-var item_2 = require('./item');
-var rectangle_1 = require('../../util/rectangle');
+var iaudio_1 = require('../source/iaudio');
+var item_1 = require('./item');
+var iflash_1 = require('../source/iflash');
 /**
  * The FlashItem class represents a flash item, which is any SWF file
  * loaded to XSplit Broadcaster.
@@ -2219,7 +1781,7 @@ var rectangle_1 = require('../../util/rectangle');
  * {@link #core/IItemColor Core/IItemColor},
  * {@link #core/IItemLayout Core/IItemLayout},
  * {@link #core/IItemTransition Core/IItemTransition},
- * {@link #core/IItemAudio Core/IItemAudio},
+ * {@link #core/IAudio Core/IAudio},
  * {@link #core/IItemEffect Core/IItemEffect}
  *
  *  All methods marked as *Chainable* resolve with the original `FlashItem`
@@ -2232,107 +1794,12 @@ var FlashItem = (function (_super) {
     function FlashItem() {
         _super.apply(this, arguments);
     }
-    /**
-     * return: Promise<Rectangle>
-     *
-     * Gets the custom resolution (in pixels) for the item, if set,
-     * regardless of its layout on the mixer. Returns a (0, 0) Rectangle if no
-     * custom resolution has been set.
-     *
-     * See also: {@link #util/Rectangle Util/Rectangle}
-     */
-    FlashItem.prototype.getCustomResolution = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            var customSize;
-            item_1.Item.get('prop:BrowserSize', _this._id).then(function (val) {
-                if (val !== '') {
-                    var _a = decodeURIComponent(val).split(','), width = _a[0], height = _a[1];
-                    customSize = rectangle_1.Rectangle.fromDimensions(Number(width), Number(height));
-                }
-                else {
-                    customSize = rectangle_1.Rectangle.fromDimensions(0, 0);
-                }
-                resolve(customSize);
-            });
-        });
-    };
-    /**
-     * param: (value: Rectangle)
-     * ```
-     * return: Promise<FlashItem>
-     * ```
-     *
-     * Sets the custom resolution for the item
-     * regardless of its layout on the mixer
-     *
-     * *Chainable.*
-     *
-     * See also: {@link #util/Rectangle Util/Rectangle}
-     */
-    FlashItem.prototype.setCustomResolution = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:BrowserSize', value.toDimensionString(), _this._id).then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    /**
-     * return: Promise<boolean>
-     *
-     * Check if right click events are sent to the item or not.
-     *
-     * #### Usage
-     *
-     * ```javascript
-     * item.getAllowRightClick().then(function(isRightClickAllowed) {
-     *   // The rest of your code here
-     * });
-     * ```
-     */
-    FlashItem.prototype.getAllowRightClick = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:BrowserRightClick', _this._id).then(function (val) {
-                resolve(val === '1');
-            });
-        });
-    };
-    /**
-     * param: (value:boolean)
-     * ```
-     * return: Promise<Item>
-     * ```
-     *
-     * Allow or disallow right click events to be sent to the item. Note that
-     * you can only catch right click events using `mouseup/mousedown`
-     *
-     * *Chainable*
-     *
-     * #### Usage
-     *
-     * ```javascript
-     * item.setAllowRightClick(true).then(function(item) {
-     *   // Promise resolves with the same Item instance
-     * });
-     * ```
-     */
-    FlashItem.prototype.setAllowRightClick = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:BrowserRightClick', (value ? '1' : '0'), _this._id)
-                .then(function () {
-                resolve(_this);
-            });
-        });
-    };
     return FlashItem;
-})(item_2.Item);
+})(item_1.Item);
 exports.FlashItem = FlashItem;
 mixin_1.applyMixins(FlashItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition,
-    iaudio_1.ItemAudio, ieffects_1.ItemEffect]);
-},{"../../internal/item":42,"../../internal/util/mixin":44,"../../util/rectangle":60,"./iaudio":13,"./ichroma":14,"./icolor":15,"./ieffects":17,"./ilayout":18,"./item":21,"./itransition":22}],11:[function(require,module,exports){
+    iaudio_1.Audio, ieffects_1.ItemEffect, iflash_1.SourceFlash]);
+},{"../../internal/util/mixin":58,"../source/iaudio":30,"../source/iflash":34,"./ichroma":11,"./icolor":12,"./ieffects":13,"./ilayout":14,"./item":16,"./itransition":17}],9:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -2341,17 +1808,13 @@ var __extends = (this && this.__extends) || function (d, b) {
     d.prototype = new __();
 };
 var mixin_1 = require('../../internal/util/mixin');
-var item_1 = require('../../internal/item');
 var ilayout_1 = require('./ilayout');
 var icolor_1 = require('./icolor');
 var ichroma_1 = require('./ichroma');
 var ieffects_1 = require('./ieffects');
 var itransition_1 = require('./itransition');
-var item_2 = require('./item');
-var json_1 = require('../../internal/util/json');
-var xml_1 = require('../../internal/util/xml');
-var item_3 = require('./item');
-var environment_1 = require('../environment');
+var item_1 = require('./item');
+var igame_1 = require('../source/igame');
 /**
  * The GameItem Class provides methods specifically used for game items and
  * also methods that is shared between Item Classes. The
@@ -2391,123 +1854,12 @@ var GameItem = (function (_super) {
     function GameItem() {
         _super.apply(this, arguments);
     }
-    /**
-     * return: Promise<boolean>
-     *
-     * Check if Game Special Optimization is currently enabled or not
-     */
-    GameItem.prototype.isSpecialOptimizationEnabled = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('GameCapSurfSharing', _this._id).then(function (res) {
-                resolve(res === '1');
-            });
-        });
-    };
-    /**
-     * param: Promise<boolean>
-     *
-     * Set Game Special Optimization to on or off
-     *
-     * *Chainable.*
-     */
-    GameItem.prototype.setSpecialOptimizationEnabled = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('GameCapSurfSharing', (value ? '1' : '0'), _this._id).then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    /**
-     * return: Promise<boolean>
-     *
-     * Check if Show Mouse is currently enabled or not
-     */
-    GameItem.prototype.isShowMouseEnabled = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('GameCapShowMouse', _this._id).then(function (res) {
-                resolve(res === '1');
-            });
-        });
-    };
-    /**
-     * param: (value: boolean)
-     *
-     * Set Show Mouse in game to on or off
-     *
-     * *Chainable.*
-     */
-    GameItem.prototype.setShowMouseEnabled = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('GameCapShowMouse', (value ? '1' : '0'), _this._id).then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    /**
-     * param: path<string>
-     *
-     * Set the offline image of a game item
-     *
-     * *Chainable.*
-     */
-    GameItem.prototype.setOfflineImage = function (path) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            if (_this._type !== item_3.ItemTypes.GAMESOURCE) {
-                reject(Error('Current item should be a game item'));
-            }
-            else if (environment_1.Environment.isSourcePlugin()) {
-                reject(Error('Source plugins cannot update offline images of other items'));
-            }
-            else if (!(_this._value instanceof xml_1.XML)) {
-                _this.getValue().then(function () {
-                    _this.setOfflineImage(path).then(function (itemObj) {
-                        resolve(itemObj);
-                    });
-                });
-            }
-            else {
-                var regExp = new RegExp('^(([A-Z|a-z]:\\\\[^*|"<>?\n]*)|(\\\\\\\\.*?' +
-                    '\\\\.*)|([A-Za-z]+\\\\[^*|"<>?\\n]*))\.(png|gif|jpg|jpeg|tif)$');
-                if (regExp.test(path) || path === '') {
-                    var valueObj = json_1.JSON.parse(_this._value.toString());
-                    valueObj['replace'] = path;
-                    _this.setValue(xml_1.XML.parseJSON(valueObj)).then(function () {
-                        resolve(_this);
-                    });
-                }
-            }
-        });
-    };
-    /**
-     * return: Promise<string>
-     *
-     * Get the offline image of a game item
-     */
-    GameItem.prototype.getOfflineImage = function () {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            if (_this._type !== item_3.ItemTypes.GAMESOURCE) {
-                reject(Error('Current item should be a game item'));
-            }
-            else {
-                _this.getValue().then(function () {
-                    var valueObj = json_1.JSON.parse(_this._value.toString());
-                    resolve(valueObj['replace'] ? valueObj['replace'] : '');
-                });
-            }
-        });
-    };
     return GameItem;
-})(item_2.Item);
+})(item_1.Item);
 exports.GameItem = GameItem;
-mixin_1.applyMixins(GameItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition,
-    ieffects_1.ItemEffect]);
-},{"../../internal/item":42,"../../internal/util/json":43,"../../internal/util/mixin":44,"../../internal/util/xml":46,"../environment":5,"./ichroma":14,"./icolor":15,"./ieffects":17,"./ilayout":18,"./item":21,"./itransition":22}],12:[function(require,module,exports){
+mixin_1.applyMixins(GameItem, [item_1.Item, ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition,
+    ieffects_1.ItemEffect, igame_1.iSourceGame]);
+},{"../../internal/util/mixin":58,"../source/igame":35,"./ichroma":11,"./icolor":12,"./ieffects":13,"./ilayout":14,"./item":16,"./itransition":17}],10:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -2515,19 +1867,16 @@ var __extends = (this && this.__extends) || function (d, b) {
     __.prototype = b.prototype;
     d.prototype = new __();
 };
-var internal_1 = require('../../internal/internal');
 var mixin_1 = require('../../internal/util/mixin');
-var item_1 = require('../../internal/item');
 var ilayout_1 = require('./ilayout');
 var icolor_1 = require('./icolor');
 var ichroma_1 = require('./ichroma');
 var ieffects_1 = require('./ieffects');
 var itransition_1 = require('./itransition');
-var iconfig_1 = require('./iconfig');
-var iaudio_1 = require('./iaudio');
-var item_2 = require('./item');
-var rectangle_1 = require('../../util/rectangle');
-var environment_1 = require('../environment');
+var iconfig_1 = require('../source/iconfig');
+var iaudio_1 = require('../source/iaudio');
+var item_1 = require('./item');
+var ihtml_1 = require('../source/ihtml');
 /**
  * The HtmlItem class represents a web page item. This covers both item
  * plugins and non-plugin URLs.
@@ -2538,8 +1887,8 @@ var environment_1 = require('../environment');
  * {@link #core/IItemColor Core/IItemColor},
  * {@link #core/IItemLayout Core/IItemLayout},
  * {@link #core/IItemTransition Core/IItemTransition},
- * {@link #core/IItemAudio Core/IItemAudio},
- * {@link #core/IItemConfigurable Core/IItemConfigurable}
+ * {@link #core/IAudio Core/IAudio},
+ * {@link #core/ISourceConfigurable Core/ISourceConfigurable}
  *
  * ### Basic Usage
  *
@@ -2568,632 +1917,12 @@ var HtmlItem = (function (_super) {
     function HtmlItem() {
         _super.apply(this, arguments);
     }
-    /**
-     * return: Promise<string>
-     *
-     * Gets the URL of this webpage item.
-     */
-    HtmlItem.prototype.getURL = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:item', _this._id).then(function (url) {
-                var _url = String(url).split('*');
-                url = _url[0];
-                resolve(url);
-            });
-        });
-    };
-    /**
-     * param: (url: string)
-     * ```
-     * return: Promise<HtmlItem>
-     * ```
-     *
-     * Sets the URL of this webpage item.
-     *
-     * *Chainable.*
-     */
-    HtmlItem.prototype.setURL = function (value) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            item_1.Item.set('prop:item', value, _this._id).then(function (code) {
-                if (code) {
-                    resolve(_this);
-                }
-                else {
-                    reject('Invalid value');
-                }
-            });
-        });
-    };
-    /**
-     * return: Promise<string>
-     *
-     * Gets the javascript commands to be executed on item upon load
-     */
-    HtmlItem.prototype.getBrowserJS = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:custom', _this._id).then(function (custom) {
-                var customJS = '';
-                try {
-                    var customObject = JSON.parse(custom);
-                    if (customObject.hasOwnProperty('customJS')) {
-                        customJS = customObject['customJS'];
-                    }
-                }
-                catch (e) {
-                }
-                resolve(customJS);
-            });
-        });
-    };
-    /**
-     * param: (js: string, refresh: boolean = false)
-     * ```
-     * return: Promise<HtmlItem>
-     * ```
-     *
-     * Sets the javascript commands to be executed on item
-     * right upon setting and on load. Optionally set second parameter
-     * to true to refresh item (needed to clean previously executed JS code.)
-     *
-     * *Chainable.*
-     */
-    HtmlItem.prototype.setBrowserJS = function (value, refresh) {
-        var _this = this;
-        if (refresh === void 0) { refresh = false; }
-        return new Promise(function (resolve, reject) {
-            var customObject = {};
-            item_1.Item.get('prop:custom', _this._id).then(function (custom) {
-                var customJS = '';
-                var customCSS = '';
-                var scriptString = ' ';
-                var scriptEnabled = true;
-                var cssEnabled = true;
-                try {
-                    customObject = JSON.parse(custom);
-                    if (customObject.hasOwnProperty('cssEnabled')) {
-                        cssEnabled = (customObject['cssEnabled'] == 'true');
-                    }
-                    if (customObject.hasOwnProperty('scriptEnabled')) {
-                        scriptEnabled = (customObject['scriptEnabled'] == 'true');
-                    }
-                    if (customObject.hasOwnProperty('customCSS')) {
-                        customCSS = customObject['customCSS'];
-                    }
-                }
-                catch (e) {
-                }
-                customObject['cssEnabled'] = cssEnabled.toString();
-                customObject['scriptEnabled'] = scriptEnabled.toString();
-                customObject['customCSS'] = customCSS;
-                customObject['customJS'] = value;
-                if (cssEnabled === true) {
-                    var cssScript = "var xjsCSSOverwrite = document.createElement('style');xjsCSSOverwrite.id = 'splitmedialabsCSSOverwrite';xjsCSSOverwrite.type = 'text/css';var h = document.querySelector('head');var existing = document.querySelector('head #splitmedialabsCSSOverwrite');if (existing != null)h.removeChild(existing);xjsCSSOverwrite.innerHTML = '" + customCSS.replace(/(\r\n|\n|\r)/gm, '').replace(/\s{2,}/g, ' ').replace(/(\[br\])/gm, '') + "';h.appendChild(xjsCSSOverwrite);";
-                    scriptString = scriptString + cssScript;
-                }
-                if (value !== '' && scriptEnabled === true) {
-                    scriptString = scriptString + value;
-                }
-                return item_1.Item.set('prop:BrowserJs', scriptString, _this._id);
-            })
-                .then(function () {
-                return item_1.Item.set('prop:custom', JSON.stringify(customObject), _this._id);
-            })
-                .then(function () {
-                if (refresh) {
-                    item_1.Item.set('refresh', '', _this._id).then(function () {
-                        resolve(_this);
-                    });
-                }
-                else {
-                    resolve(_this);
-                }
-            });
-        });
-    };
-    /**
-     * return: Promise<boolean>
-     *
-     * Gets if BrowserJS is enabled and executed on load
-     */
-    HtmlItem.prototype.isBrowserJSEnabled = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:custom', _this._id).then(function (custom) {
-                var enabled = true;
-                try {
-                    var customObject = JSON.parse(custom);
-                    if (customObject.hasOwnProperty('scriptEnabled')) {
-                        enabled = (customObject['scriptEnabled'] == 'true');
-                    }
-                }
-                catch (e) {
-                }
-                resolve(enabled);
-            });
-        });
-    };
-    /**
-     * param: (value: boolean)
-     * ```
-     * return: Promise<HtmlItem>
-     * ```
-     *
-     * Enables or disables execution of the set BrowserJs upon load.
-     * Note that disabling this will require item to be refreshed
-     * in order to remove any BrowserJS previously executed.
-     *
-     * *Chainable.*
-     */
-    HtmlItem.prototype.enableBrowserJS = function (value) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            var customObject = {};
-            item_1.Item.get('prop:custom', _this._id).then(function (custom) {
-                var customJS = '';
-                var customCSS = '';
-                var scriptString = ' ';
-                var scriptEnabled = true;
-                var cssEnabled = true;
-                try {
-                    customObject = JSON.parse(custom);
-                    if (customObject.hasOwnProperty('cssEnabled')) {
-                        cssEnabled = (customObject['cssEnabled'] == 'true');
-                    }
-                    if (customObject.hasOwnProperty('customJS')) {
-                        customJS = customObject['customJS'];
-                    }
-                    if (customObject.hasOwnProperty('customCSS')) {
-                        customCSS = customObject['customCSS'];
-                    }
-                }
-                catch (e) {
-                }
-                customObject['cssEnabled'] = cssEnabled.toString();
-                customObject['scriptEnabled'] = value.toString();
-                customObject['customJS'] = customJS;
-                customObject['customCSS'] = customCSS;
-                if (cssEnabled === true) {
-                    var cssScript = 'var xjsCSSOverwrite = document.createElement("style");' +
-                        'xjsCSSOverwrite.id = "splitmedialabsCSSOverwrite";' +
-                        'xjsCSSOverwrite.type = "text/css";' +
-                        'var h = document.querySelector("head");' +
-                        'var existing = document' +
-                        '.querySelector("head #splitmedialabsCSSOverwrite");' +
-                        'if (existing != null)h.removeChild(existing);' +
-                        'xjsCSSOverwrite.innerHTML = "' +
-                        customCSS.replace(/(\r\n|\n|\r)/gm, '')
-                            .replace(/\s{2,}/g, ' ').replace(/(\[br\])/gm, '') + '";"' +
-                        'h.appendChild(xjsCSSOverwrite);';
-                    scriptString = scriptString + cssScript;
-                }
-                if (customJS !== '' && value === true) {
-                    scriptString = scriptString + customJS;
-                }
-                return item_1.Item.set('prop:BrowserJs', scriptString, _this._id);
-            })
-                .then(function () {
-                return item_1.Item.set('prop:custom', JSON.stringify(customObject), _this._id);
-            })
-                .then(function () {
-                if (!value) {
-                    item_1.Item.set('refresh', '', _this._id).then(function () {
-                        resolve(_this);
-                    });
-                }
-                else {
-                    resolve(_this);
-                }
-            });
-        });
-    };
-    /**
-     * return: Promise<string>
-     *
-     * Gets the custom CSS applied to the document upon loading
-     */
-    HtmlItem.prototype.getCustomCSS = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:custom', _this._id).then(function (custom) {
-                var customCSS = '';
-                try {
-                    var customObject = JSON.parse(custom);
-                    if (customObject.hasOwnProperty('customCSS')) {
-                        customCSS = customObject['customCSS'];
-                    }
-                }
-                catch (e) {
-                }
-                resolve(customCSS);
-            });
-        });
-    };
-    /**
-     * param: (value: string)
-     * ```
-     * return: Promise<HtmlItem>
-     * ```
-     *
-     * Sets the custom CSS to be applied to the document upon loading
-     *
-     * *Chainable.*
-     */
-    HtmlItem.prototype.setCustomCSS = function (value) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            var customObject = {};
-            item_1.Item.get('prop:custom', _this._id).then(function (custom) {
-                var customJS = '';
-                var customCSS = '';
-                var scriptString = ' ';
-                var scriptEnabled = true;
-                var cssEnabled = true;
-                try {
-                    customObject = JSON.parse(custom);
-                    if (customObject.hasOwnProperty('cssEnabled')) {
-                        cssEnabled = (customObject['cssEnabled'] == 'true');
-                    }
-                    if (customObject.hasOwnProperty('scriptEnabled')) {
-                        scriptEnabled = (customObject['scriptEnabled'] == 'true');
-                    }
-                    if (customObject.hasOwnProperty('customJS')) {
-                        customJS = customObject['customJS'];
-                    }
-                }
-                catch (e) {
-                }
-                customObject['cssEnabled'] = cssEnabled.toString();
-                customObject['scriptEnabled'] = scriptEnabled.toString();
-                customObject['customJS'] = customJS;
-                customObject['customCSS'] = value;
-                if (cssEnabled === true) {
-                    var cssScript = 'var xjsCSSOverwrite = document.createElement("style");' +
-                        'xjsCSSOverwrite.id = "splitmedialabsCSSOverwrite";' +
-                        'xjsCSSOverwrite.type = "text/css";' +
-                        'var h = document.querySelector("head");' +
-                        'var existing = document' +
-                        '.querySelector("head #splitmedialabsCSSOverwrite");' +
-                        'if (existing != null)h.removeChild(existing);' +
-                        'xjsCSSOverwrite.innerHTML = "' +
-                        value.replace(/(\r\n|\n|\r)/gm, '')
-                            .replace(/\s{2,}/g, ' ').replace(/(\[br\])/gm, '') +
-                        '";h.appendChild(xjsCSSOverwrite);';
-                    scriptString = scriptString + cssScript;
-                }
-                if (customJS !== '' && scriptEnabled === true) {
-                    scriptString = scriptString + customJS;
-                }
-                return item_1.Item.set('prop:BrowserJs', scriptString, _this._id);
-            })
-                .then(function () {
-                return item_1.Item.set('prop:custom', JSON.stringify(customObject), _this._id);
-            })
-                .then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    /**
-     * return: Promise<boolean>
-     *
-     * Gets if custom CSS is enabled and applied to the document on load
-     */
-    HtmlItem.prototype.isCustomCSSEnabled = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:custom', _this._id).then(function (custom) {
-                var enabled = true;
-                try {
-                    var customObject = JSON.parse(custom);
-                    if (customObject.hasOwnProperty('cssEnabled')) {
-                        enabled = (customObject['cssEnabled'] == 'true');
-                    }
-                }
-                catch (e) {
-                }
-                resolve(enabled);
-            });
-        });
-    };
-    /**
-     * param: (value: boolean)
-     * ```
-     * return: Promise<HtmlItem>
-     * ```
-     *
-     * Enables or disables application of custom CSS to the document
-     *
-     * *Chainable.*
-     */
-    HtmlItem.prototype.enableCustomCSS = function (value) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            var customObject = {};
-            item_1.Item.get('prop:custom', _this._id).then(function (custom) {
-                var customJS = '';
-                var customCSS = '';
-                var scriptString = ' ';
-                var scriptEnabled = true;
-                var cssEnabled = true;
-                try {
-                    customObject = JSON.parse(custom);
-                    if (customObject.hasOwnProperty('scriptEnabled')) {
-                        scriptEnabled = (customObject['scriptEnabled'] == 'true');
-                    }
-                    if (customObject.hasOwnProperty('customJS')) {
-                        customJS = customObject['customJS'];
-                    }
-                    if (customObject.hasOwnProperty('customCSS')) {
-                        customCSS = customObject['customCSS'];
-                    }
-                }
-                catch (e) {
-                }
-                customObject['scriptEnabled'] = scriptEnabled.toString();
-                customObject['cssEnabled'] = value.toString();
-                customObject['customJS'] = customJS;
-                customObject['customCSS'] = customCSS;
-                if (value === true) {
-                    var cssScript = 'var xjsCSSOverwrite = document.createElement("style");' +
-                        'xjsCSSOverwrite.id = "splitmedialabsCSSOverwrite";' +
-                        'xjsCSSOverwrite.type = "text/css";' +
-                        'var h = document.querySelector("head");' +
-                        'var existing = document' +
-                        '.querySelector("head #splitmedialabsCSSOverwrite");' +
-                        'if (existing != null)h.removeChild(existing);' +
-                        'xjsCSSOverwrite.innerHTML = "' +
-                        customCSS.replace(/(\r\n|\n|\r)/gm, '')
-                            .replace(/\s{2,}/g, ' ').replace(/(\[br\])/gm, '') +
-                        '";h.appendChild(xjsCSSOverwrite);';
-                    scriptString = scriptString + cssScript;
-                }
-                if (customJS !== '' && value === scriptEnabled) {
-                    scriptString = scriptString + customJS;
-                }
-                return item_1.Item.set('prop:BrowserJs', scriptString, _this._id);
-            })
-                .then(function () {
-                return item_1.Item.set('prop:custom', JSON.stringify(customObject), _this._id);
-            })
-                .then(function () {
-                if (!value) {
-                    var cssScript = "var h = document.querySelector('head');var existing3 = document.querySelector('head #splitmedialabsCSSOverwrite');if (existing3 != null)h.removeChild(existing3);";
-                    if (environment_1.Environment.isSourcePlugin()) {
-                        eval(cssScript);
-                    }
-                    else {
-                        internal_1.exec('CallInner', 'eval', cssScript);
-                    }
-                    resolve(_this);
-                }
-                else {
-                    resolve(_this);
-                }
-            });
-        });
-    };
-    /**
-     * return: Promise<boolean>
-     *
-     * Check if browser is rendered transparent
-     */
-    HtmlItem.prototype.isBrowserTransparent = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:BrowserTransparent', _this._id).then(function (isTransparent) {
-                resolve(isTransparent === '1');
-            });
-        });
-    };
-    /**
-     * param: Promise<boolean>
-     * ```
-     * return: Promise<HtmlItem>
-     * ```
-     *
-     * Enable or disabled transparency of CEF browser
-     *
-     * *Chainable.*
-     */
-    HtmlItem.prototype.enableBrowserTransparency = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:BrowserTransparent', (value ? '1' : '0'), _this._id).then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    /**
-     * return: Promise<Rectangle>
-     *
-     * Gets the custom browser window size (in pixels) for the item, if set,
-     * regardless of its layout on the mixer. Returns a (0, 0) Rectangle if no
-     * custom size has been set.
-     *
-     * See also: {@link #util/Rectangle Util/Rectangle}
-     */
-    HtmlItem.prototype.getBrowserCustomSize = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            var customSize;
-            item_1.Item.get('prop:BrowserSize', _this._id).then(function (val) {
-                if (val !== '') {
-                    var _a = decodeURIComponent(val).split(','), width = _a[0], height = _a[1];
-                    customSize = rectangle_1.Rectangle.fromDimensions(Number(width) / window.devicePixelRatio, Number(height) / window.devicePixelRatio);
-                }
-                else {
-                    customSize = rectangle_1.Rectangle.fromDimensions(0, 0);
-                }
-                resolve(customSize);
-            });
-        });
-    };
-    /**
-     * param: Promise<Rectangle>
-     * ```
-     * return: Promise<HtmlItem>
-     * ```
-     *
-     * Sets the custom browser window size for the item
-     * regardless of its layout on the mixer
-     *
-     * *Chainable.*
-     *
-     * See also: {@link #util/Rectangle Util/Rectangle}
-     */
-    HtmlItem.prototype.setBrowserCustomSize = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            // Set the correct width and height based on the DPI settings
-            value.setWidth(value.getWidth() * window.devicePixelRatio);
-            value.setHeight(value.getHeight() * window.devicePixelRatio);
-            item_1.Item.set('prop:BrowserSize', value.toDimensionString(), _this._id)
-                .then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    /**
-     * return: Promise<boolean>
-     *
-     * Check if right click events are sent to the item or not.
-     *
-     * #### Usage
-     *
-     * ```javascript
-     * item.getAllowRightClick().then(function(isRightClickAllowed) {
-     *   // The rest of your code here
-     * });
-     * ```
-     */
-    HtmlItem.prototype.getAllowRightClick = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:BrowserRightClick', _this._id).then(function (val) {
-                resolve(val === '1');
-            });
-        });
-    };
-    /**
-     * param: (value:boolean)
-     * ```
-     * return: Promise<Item>
-     * ```
-     *
-     * Allow or disallow right click events to be sent to the item. Note that
-     * you can only catch right click events using `mouseup/mousedown`
-     *
-     * *Chainable*
-     *
-     * #### Usage
-     *
-     * ```javascript
-     * item.setAllowRightClick(true).then(function(item) {
-     *   // Promise resolves with the same Item instance
-     * });
-     * ```
-     */
-    HtmlItem.prototype.setAllowRightClick = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:BrowserRightClick', (value ? '1' : '0'), _this._id)
-                .then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    /**
-     * param: (func: string, arg: string)
-     * ```
-     * return: Promise<HtmlItem>
-     * ```
-     *
-     * Allow this source to communicate with another source.
-     */
-    HtmlItem.prototype.call = function (func, arg) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            internal_1.exec('CallInner' +
-                (String(slot) === '0' ? '' : slot + 1), func, arg);
-            resolve(_this);
-        });
-    };
     return HtmlItem;
-})(item_2.Item);
+})(item_1.Item);
 exports.HtmlItem = HtmlItem;
-mixin_1.applyMixins(HtmlItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition,
-    iconfig_1.ItemConfigurable, iaudio_1.ItemAudio, ieffects_1.ItemEffect]);
-},{"../../internal/internal":41,"../../internal/item":42,"../../internal/util/mixin":44,"../../util/rectangle":60,"../environment":5,"./iaudio":13,"./ichroma":14,"./icolor":15,"./iconfig":16,"./ieffects":17,"./ilayout":18,"./item":21,"./itransition":22}],13:[function(require,module,exports){
-/// <reference path="../../../defs/es6-promise.d.ts" />
-var item_1 = require('../../internal/item');
-var ItemAudio = (function () {
-    function ItemAudio() {
-    }
-    ItemAudio.prototype.getVolume = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:volume', _this._id).then(function (val) {
-                resolve(Number(val));
-            });
-        });
-    };
-    ItemAudio.prototype.setVolume = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            value = value < 0 ? 0 : value > 100 ? 100 : value;
-            item_1.Item.set('prop:volume', String(value), _this._id).then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    ItemAudio.prototype.isMute = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:mute', _this._id).then(function (val) {
-                resolve(val === '1');
-            });
-        });
-    };
-    ItemAudio.prototype.setMute = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:mute', (value ? '1' : '0'), _this._id).then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    ItemAudio.prototype.isStreamOnlyAudio = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:sounddev', _this._id).then(function (val) {
-                resolve(val === '1');
-            });
-        });
-    };
-    ItemAudio.prototype.setStreamOnlyAudio = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:sounddev', (value ? '1' : '0'), _this._id).then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    ItemAudio.prototype.isAudioAvailable = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:audioavail', _this._id).then(function (val) {
-                resolve(val === '1');
-            });
-        });
-    };
-    return ItemAudio;
-})();
-exports.ItemAudio = ItemAudio;
-},{"../../internal/item":42}],14:[function(require,module,exports){
+mixin_1.applyMixins(HtmlItem, [ihtml_1.iSourceHtml, ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition,
+    iconfig_1.SourceConfigurable, iaudio_1.Audio, ieffects_1.ItemEffect]);
+},{"../../internal/util/mixin":58,"../source/iaudio":30,"../source/iconfig":33,"../source/ihtml":36,"./ichroma":11,"./icolor":12,"./ieffects":13,"./ilayout":14,"./item":16,"./itransition":17}],11:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var item_1 = require('../../internal/item');
 var color_1 = require('../../util/color');
@@ -3577,7 +2306,7 @@ var ItemChroma = (function () {
     return ItemChroma;
 })();
 exports.ItemChroma = ItemChroma;
-},{"../../internal/item":42,"../../util/color":56}],15:[function(require,module,exports){
+},{"../../internal/item":54,"../../util/color":70}],12:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var item_1 = require('../../internal/item');
 var color_1 = require('../../util/color');
@@ -3596,7 +2325,7 @@ var ItemColor = (function () {
         var _this = this;
         return new Promise(function (resolve, reject) {
             if (value < 0 || value > 255) {
-                reject(RangeError('Transparency may only be in the range 0 to 255.'));
+                reject(RangeError('Transparency may only be in the range 0-255.'));
             }
             else {
                 item_1.Item.set('prop:alpha', String(value), _this._id).then(function () {
@@ -3693,8 +2422,14 @@ var ItemColor = (function () {
         var _this = this;
         return new Promise(function (resolve) {
             item_1.Item.get('prop:border', _this._id).then(function (val) {
-                var bgr = Number(val) - 0x80000000;
-                var color = color_1.Color.fromBGRInt(bgr);
+                var color;
+                if (val === '0') {
+                    color = color_1.Color.fromTransparent();
+                }
+                else {
+                    var bgr = Number(val) - 0x80000000;
+                    color = color_1.Color.fromBGRInt(bgr);
+                }
                 resolve(color);
             });
         });
@@ -3702,7 +2437,14 @@ var ItemColor = (function () {
     ItemColor.prototype.setBorderColor = function (value) {
         var _this = this;
         return new Promise(function (resolve, reject) {
-            item_1.Item.set('prop:border', String(value.getIbgr() - 0x80000000), _this._id).then(function () {
+            var colorString;
+            if (value.isTransparent()) {
+                colorString = '0';
+            }
+            else {
+                colorString = String(value.getIbgr() - 0x80000000);
+            }
+            item_1.Item.set('prop:border', colorString, _this._id).then(function () {
                 resolve(_this);
             });
         });
@@ -3731,102 +2473,7 @@ var ItemColor = (function () {
     return ItemColor;
 })();
 exports.ItemColor = ItemColor;
-},{"../../internal/item":42,"../../util/color":56}],16:[function(require,module,exports){
-/// <reference path="../../../defs/es6-promise.d.ts" />
-var item_1 = require('../../internal/item');
-var global_1 = require('../../internal/global');
-var internal_1 = require('../../internal/internal');
-var environment_1 = require('../environment');
-var ItemConfigurable = (function () {
-    function ItemConfigurable() {
-    }
-    ItemConfigurable.prototype.loadConfig = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:BrowserConfiguration', _this._id).then(function (config) {
-                var configObj = config === 'null' ? {} : JSON.parse(config);
-                var persist = global_1.Global.getPersistentConfig();
-                for (var key in persist) {
-                    delete configObj[key];
-                }
-                resolve(configObj);
-            });
-        });
-    };
-    ItemConfigurable.prototype.saveConfig = function (configObj) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            if (environment_1.Environment.isSourcePlugin) {
-                var slot = item_1.Item.attach(_this._id);
-                var savingAllowed = false;
-                item_1.Item.get('itemlist').then(function (itemlist) {
-                    // for versions lower than 2.8
-                    if (itemlist === 'null') {
-                        savingAllowed = (slot === 0);
-                    }
-                    else {
-                        var itemsArray = itemlist.split(',');
-                        savingAllowed = (itemsArray.indexOf(_this._id) > -1);
-                    }
-                    // only allow direct saving for self
-                    if (savingAllowed) {
-                        // check for valid object
-                        if ({}.toString.call(configObj) === '[object Object]') {
-                            // add persisted configuration if available
-                            // currently only top level merging is available
-                            var persist = global_1.Global.getPersistentConfig();
-                            for (var key in persist) {
-                                configObj[key] = persist[key];
-                            }
-                            internal_1.exec('SetBrowserProperty', 'Configuration', JSON.stringify(configObj));
-                            resolve(_this);
-                        }
-                        else {
-                            reject(Error('Configuration object should be ' +
-                                'in JSON format.'));
-                        }
-                    }
-                    else {
-                        reject(Error('Items may only request other ' +
-                            'Items to save a configuration. Consider ' +
-                            'calling requestSaveConfig() on this Item ' +
-                            'instance instead.'));
-                    }
-                });
-            }
-            else {
-                reject(Error('Extensions and source properties windows are ' +
-                    'not allowed to directly save configuration objects. ' +
-                    'Call requestSaveConfig() instead.'));
-            }
-        });
-    };
-    ItemConfigurable.prototype.requestSaveConfig = function (configObj) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            internal_1.exec('CallInner' + (slot === 0 ? '' : (slot + 1)), 'MessageSource', JSON.stringify({
-                'request': 'saveConfig',
-                'data': configObj
-            }));
-            resolve(_this);
-        });
-    };
-    ItemConfigurable.prototype.applyConfig = function (configObj) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            var slot = item_1.Item.attach(_this._id);
-            internal_1.exec('CallInner' + (slot === 0 ? '' : (slot + 1)), 'MessageSource', JSON.stringify({
-                'request': 'applyConfig',
-                'data': configObj
-            }));
-            resolve(_this);
-        });
-    };
-    return ItemConfigurable;
-})();
-exports.ItemConfigurable = ItemConfigurable;
-},{"../../internal/global":39,"../../internal/internal":41,"../../internal/item":42,"../environment":5}],17:[function(require,module,exports){
+},{"../../internal/item":54,"../../util/color":70}],13:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var item_1 = require('../../internal/item');
 var color_1 = require('../../util/color');
@@ -4360,7 +3007,7 @@ var ItemEffect = (function () {
                     resolve(false);
                 }
                 else {
-                    reject(new Error('This method is not available if filemasking is not enabled.'));
+                    reject(Error('This method is not available if filemasking is not enabled.'));
                 }
             });
         });
@@ -4376,7 +3023,7 @@ var ItemEffect = (function () {
                     item_1.Item.set('prop:edgeeffectmaskmode', value ? '4' : '2', _this._id);
                 }
                 else {
-                    reject(new Error('This method is not available if filemasking is not enabled.'));
+                    reject(Error('This method is not available if filemasking is not enabled.'));
                 }
             });
         });
@@ -4384,9 +3031,10 @@ var ItemEffect = (function () {
     return ItemEffect;
 })();
 exports.ItemEffect = ItemEffect;
-},{"../../internal/item":42,"../../util/color":56}],18:[function(require,module,exports){
+},{"../../internal/item":54,"../../util/color":70}],14:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var item_1 = require('../../internal/item');
+var scene_1 = require('../scene');
 var rectangle_1 = require('../../util/rectangle');
 var ItemLayout = (function () {
     function ItemLayout() {
@@ -4589,8 +3237,8 @@ var ItemLayout = (function () {
                 });
             }
             else {
-                reject('Error setting cropping,' +
-                    ' insufficient properties (left, top, right, bottom)');
+                reject(Error('Error setting cropping,' +
+                    ' insufficient properties (left, top, right, bottom)'));
             }
         });
     };
@@ -4988,15 +3636,103 @@ var ItemLayout = (function () {
                 });
             }
             else {
-                reject('Error setting cropping,' +
-                    ' insufficient properties (left, top, right, bottom)');
+                reject(Error('Error setting cropping,' +
+                    ' insufficient properties (left, top, right, bottom)'));
             }
+        });
+    };
+    ItemLayout.prototype.bringForward = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:zorder', '+', _this._id).then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    ItemLayout.prototype.sendBackward = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            item_1.Item.set('prop:zorder', '-', _this._id).then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    ItemLayout.prototype.bringToFront = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var itemsLength = 0;
+            var itemIndex = -1;
+            var forwardStep = 0;
+            scene_1.Scene.searchScenesByItemId(_this._id).then(function (itemScene) {
+                return itemScene.getItems();
+            }).then(function (sceneItems) {
+                itemsLength = sceneItems.length;
+                for (var i = 0; i < itemsLength; ++i) {
+                    if (sceneItems[i]['_id'] === _this._id) {
+                        itemIndex = i;
+                        break;
+                    }
+                }
+                if (itemsLength > 0 && itemIndex > -1) {
+                    forwardStep = itemsLength - 1 - itemIndex;
+                }
+                var promiseArray = [];
+                var zorderPromise = function (itemId, idx) { return new Promise(function (zorderResolve) {
+                    item_1.Item.set('prop:zorder', '+', _this._id).then(function () {
+                        zorderResolve();
+                    });
+                }); };
+                for (var i = forwardStep - 1; i >= 0; i--) {
+                    promiseArray.push(zorderPromise(_this._id, i));
+                }
+                Promise.all(promiseArray).then(function () {
+                    resolve(_this);
+                });
+            });
+            // get index in scene
+            // call bring forward based on index
+        });
+    };
+    ItemLayout.prototype.sendToBack = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var itemsLength = 0;
+            var itemIndex = -1;
+            var backwardStep = 0;
+            scene_1.Scene.searchScenesByItemId(_this._id).then(function (itemScene) {
+                return itemScene.getItems();
+            }).then(function (sceneItems) {
+                itemsLength = sceneItems.length;
+                for (var i = 0; i < itemsLength; ++i) {
+                    if (sceneItems[i]['_id'] === _this._id) {
+                        itemIndex = i;
+                        break;
+                    }
+                }
+                if (itemsLength > 0 && itemIndex > -1) {
+                    backwardStep = itemIndex;
+                }
+                var promiseArray = [];
+                var zorderPromise = function (itemId, idx) { return new Promise(function (zorderResolve) {
+                    item_1.Item.set('prop:zorder', '-', _this._id).then(function () {
+                        zorderResolve();
+                    });
+                }); };
+                for (var i = backwardStep - 1; i >= 0; i--) {
+                    promiseArray.push(zorderPromise(_this._id, i));
+                }
+                Promise.all(promiseArray).then(function () {
+                    resolve(_this);
+                });
+            });
+            // get index in scene
+            // call bring forward based on index
         });
     };
     return ItemLayout;
 })();
 exports.ItemLayout = ItemLayout;
-},{"../../internal/item":42,"../../util/rectangle":60}],19:[function(require,module,exports){
+},{"../../internal/item":54,"../../util/rectangle":74,"../scene":23}],15:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -5033,279 +3769,42 @@ var ImageItem = (function (_super) {
     return ImageItem;
 })(item_1.Item);
 exports.ImageItem = ImageItem;
-mixin_1.applyMixins(ImageItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition, ieffects_1.ItemEffect]);
-},{"../../internal/util/mixin":44,"./ichroma":14,"./icolor":15,"./ieffects":17,"./ilayout":18,"./item":21,"./itransition":22}],20:[function(require,module,exports){
+mixin_1.applyMixins(ImageItem, [item_1.Item, ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition, ieffects_1.ItemEffect]);
+},{"../../internal/util/mixin":58,"./ichroma":11,"./icolor":12,"./ieffects":13,"./ilayout":14,"./item":16,"./itransition":17}],16:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
-var item_1 = require('../../internal/item');
-var cuepoint_1 = require('./cuepoint');
-/**
- *  Used by items that implement the Playback interface.
- *  Check `getActionAfterPlayback()`/`setActionAfterPlayback()` method of
- *  {@link #core/Mediaitem#getActionAfterPlayback Core/Mediaitem}.
- */
-(function (ActionAfterPlayback) {
-    ActionAfterPlayback[ActionAfterPlayback["NONE"] = 0] = "NONE";
-    ActionAfterPlayback[ActionAfterPlayback["REWIND"] = 1] = "REWIND";
-    ActionAfterPlayback[ActionAfterPlayback["LOOP"] = 2] = "LOOP";
-    ActionAfterPlayback[ActionAfterPlayback["TRANSPARENT"] = 3] = "TRANSPARENT";
-    ActionAfterPlayback[ActionAfterPlayback["HIDE"] = 4] = "HIDE";
-})(exports.ActionAfterPlayback || (exports.ActionAfterPlayback = {}));
-var ActionAfterPlayback = exports.ActionAfterPlayback;
-var AUDIO_REGEX = /\.(mp3|aac|cda|ogg|m4a|flac|wma|aiff|aif|wav|mid|midi|rma)$/;
-var VIDEO_REGEX = /\.(avi|flv|mkv|mp4|mpg|wmv|3gp|3g2|asf|f4v|mov|mpeg|vob|webm)$/;
-var ItemPlayback = (function () {
-    function ItemPlayback() {
-    }
-    ItemPlayback.prototype.isSeekable = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('sync:syncable', _this._id).then(function (val) {
-                resolve(val === '1' ? true : false);
-            });
-        });
-    };
-    ItemPlayback.prototype.getPlaybackPosition = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('sync:position', _this._id).then(function (val) {
-                resolve(Number(val) / 10000000);
-            });
-        });
-    };
-    ItemPlayback.prototype.setPlaybackPosition = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('sync:position', String(value * 10000000), _this._id).then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    ItemPlayback.prototype.getPlaybackDuration = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('sync:duration', _this._id).then(function (val) {
-                resolve(Number(val) / 10000000);
-            });
-        });
-    };
-    ItemPlayback.prototype.isPlaying = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('sync:state', _this._id).then(function (val) {
-                resolve(val === "running");
-            });
-        });
-    };
-    ItemPlayback.prototype.setPlaying = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('sync:state', value ? "running" : "stopped", _this._id).then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    ItemPlayback.prototype.getPlaybackStartPosition = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:InPoint', _this._id).then(function (val) {
-                resolve(Number(val) / 10000000);
-            });
-        });
-    };
-    ItemPlayback.prototype.setPlaybackStartPosition = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:InPoint', String(value * 10000000), _this._id).then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    ItemPlayback.prototype.getPlaybackEndPosition = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:OutPoint', _this._id).then(function (val) {
-                resolve(Number(val) / 10000000);
-            });
-        });
-    };
-    ItemPlayback.prototype.setPlaybackEndPosition = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:OutPoint', String(value * 10000000), _this._id).then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    ItemPlayback.prototype.getActionAfterPlayback = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:OpWhenFinished', _this._id).then(function (val) {
-                resolve(Number(val));
-            });
-        });
-    };
-    ItemPlayback.prototype.setActionAfterPlayback = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:OpWhenFinished', String(value), _this._id).then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    ItemPlayback.prototype.isAutostartOnSceneLoad = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:StartOnLoad', _this._id).then(function (val) {
-                resolve(val === '1');
-            });
-        });
-    };
-    ItemPlayback.prototype.setAutostartOnSceneLoad = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:StartOnLoad', (value ? '1' : '0'), _this._id).then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    ItemPlayback.prototype.isForceDeinterlace = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:fdeinterlace', _this._id).then(function (val) {
-                resolve(val === '3');
-            });
-        });
-    };
-    ItemPlayback.prototype.setForceDeinterlace = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:fdeinterlace', (value ? '3' : '0'), _this._id).then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    ItemPlayback.prototype.isRememberingPlaybackPosition = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:RememberPosition', _this._id).then(function (val) {
-                resolve(val === '1');
-            });
-        });
-    };
-    ItemPlayback.prototype.setRememberingPlaybackPosition = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:RememberPosition', (value ? '1' : '0'), _this._id).then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    ItemPlayback.prototype.isShowingPlaybackPosition = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:ShowPosition', _this._id).then(function (val) {
-                resolve(val === '1');
-            });
-        });
-    };
-    ItemPlayback.prototype.setShowingPlaybackPosition = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:ShowPosition', (value ? '1' : '0'), _this._id).then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    ItemPlayback.prototype.getCuePoints = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:CuePoints', _this._id).then(function (cuePointString) {
-                if (cuePointString === '') {
-                    resolve([]);
-                }
-                else {
-                    var cuePointStrings = cuePointString.split(',');
-                    var cuePoints = cuePointStrings.map(function (string) { return cuepoint_1.CuePoint._fromString(string); });
-                    resolve(cuePoints);
-                }
-            });
-        });
-    };
-    ItemPlayback.prototype.setCuePoints = function (cuePoints) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            var cuePointString = cuePoints.map(function (point) { return point.toString(); }).join(',');
-            resolve(_this);
-        });
-    };
-    ItemPlayback.prototype.isAudio = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:item', _this._id).then(function (filename) {
-                resolve(AUDIO_REGEX.test(filename));
-            });
-        });
-    };
-    ItemPlayback.prototype.isVideo = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:item', _this._id).then(function (filename) {
-                resolve(VIDEO_REGEX.test(filename));
-            });
-        });
-    };
-    ItemPlayback.prototype.getValue = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            // we do not do any additional checking since we are assured of the type
-            item_1.Item.get('prop:item', _this._id).then(function (val) {
-                resolve(val);
-            });
-        });
-    };
-    ;
-    ItemPlayback.prototype.setValue = function (filename) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            if (VIDEO_REGEX.test(filename) || AUDIO_REGEX.test(filename)) {
-                item_1.Item.set('prop:item', filename, _this._id)
-                    .then(function () { return item_1.Item.set('prop:name', filename, _this._id); })
-                    .then(function () { return item_1.Item.set('prop:CuePoints', '', _this._id); })
-                    .then(function () {
-                    resolve(_this);
-                });
-            }
-            else {
-                reject(new Error('You can only set the value to a valid media type'));
-            }
-        });
-    };
-    return ItemPlayback;
-})();
-exports.ItemPlayback = ItemPlayback;
-},{"../../internal/item":42,"./cuepoint":9}],21:[function(require,module,exports){
-/// <reference path="../../../defs/es6-promise.d.ts" />
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
 var mixin_1 = require('../../internal/util/mixin');
+var eventemitter_1 = require('../../util/eventemitter');
 var item_1 = require('../../internal/item');
 var app_1 = require('../../internal/app');
+var eventmanager_1 = require('../../internal/eventmanager');
 var environment_1 = require('../environment');
 var json_1 = require('../../internal/util/json');
 var xml_1 = require('../../internal/util/xml');
 var scene_1 = require('../scene');
 var ilayout_1 = require('./ilayout');
 var version_1 = require('../../internal/util/version');
-(function (ItemTypes) {
-    ItemTypes[ItemTypes["UNDEFINED"] = 0] = "UNDEFINED";
-    ItemTypes[ItemTypes["FILE"] = 1] = "FILE";
-    ItemTypes[ItemTypes["LIVE"] = 2] = "LIVE";
-    ItemTypes[ItemTypes["TEXT"] = 3] = "TEXT";
-    ItemTypes[ItemTypes["BITMAP"] = 4] = "BITMAP";
-    ItemTypes[ItemTypes["SCREEN"] = 5] = "SCREEN";
-    ItemTypes[ItemTypes["FLASHFILE"] = 6] = "FLASHFILE";
-    ItemTypes[ItemTypes["GAMESOURCE"] = 7] = "GAMESOURCE";
-    ItemTypes[ItemTypes["HTML"] = 8] = "HTML";
-})(exports.ItemTypes || (exports.ItemTypes = {}));
-var ItemTypes = exports.ItemTypes;
+var isource_1 = require('../source/isource');
+var source_1 = require('../source/source');
+var game_1 = require('../source/game');
+var camera_1 = require('../source/camera');
+var audio_1 = require('../source/audio');
+var videoplaylist_1 = require('../source/videoplaylist');
+var html_1 = require('../source/html');
+var flash_1 = require('../source/flash');
+var screen_1 = require('../source/screen');
+var image_1 = require('../source/image');
+var media_1 = require('../source/media');
+/**
+ * Used by items to determine the its view type.
+ *
+ * Check `getView()` method of {@link #core/Item#getView Core/Item}
+ */
 (function (ViewTypes) {
     ViewTypes[ViewTypes["MAIN"] = 0] = "MAIN";
     ViewTypes[ViewTypes["PREVIEW"] = 1] = "PREVIEW";
@@ -5313,8 +3812,10 @@ var ItemTypes = exports.ItemTypes;
 })(exports.ViewTypes || (exports.ViewTypes = {}));
 var ViewTypes = exports.ViewTypes;
 /**
- * An `Item` represents an object that is used as a item on the stage.
- * Some possible items are games, microphones, or a webpage.
+ * An `Item` is rendered from a {@link #core/Source Source} and represents an
+ * object that is used as an item on the stage. Multiple items may be linked to
+ * a single source and any changes made to the source would affect all linked
+ * items.
  *
  * Implements: {@link #core/IItemLayout Core/IItemLayout}
  *
@@ -5322,14 +3823,14 @@ var ViewTypes = exports.ViewTypes;
  *
  * ```javascript
  * var xjs = require('xjs');
- * var Scene = xjs.Scene.getById(0);
+ * var Scene = xjs.Scene.getById(1);
  *
  * Scene.getItems().then(function(items) {
  *   if (items.length === 0) return;
  *
  *   // There's a valid item, let's use that
  *   var item = items[items.length - 1];
- *   return item.setCustomName('ItemTesting');
+ *   return item.setKeepAspectRatio(true);
  * }).then(function(item) {
  *   // Do something else here
  * });
@@ -5338,363 +3839,176 @@ var ViewTypes = exports.ViewTypes;
  * This allows you to perform sequential operations correctly:
  * ```javascript
  * var xjs = require('xjs');
- * var Item = xjs.Item;
+ * var Source = xjs.Source;
  *
  * // an item that sets its own properties on load
  * xjs.ready()
- *    .then(Item.getItemList)
- *    .then(function(item) {
- *     return item.setCustomName('MyCustomName');
- *  }).then(function(item) {
- *     return item.setKeepLoaded(true);
- *  }).then(function(item) {
- *     // set more properties here
- *  });
+ *    .then(Source.getCurrentSource)
+ *    .then(function(source) {
+ *    return source.getItemList()
+ *  }).then(function(items) {
+ *    return items[0].setEnhancedResizeEnabled(true)
+ *  }).then(function(items) {
+ *    return items[0].setPositionLocked(true)
+ *  }).then(function(items) {
+ *    //set more properties here
+ *  })
  * ```
  */
-var Item = (function () {
+var Item = (function (_super) {
+    __extends(Item, _super);
     function Item(props) {
-        props = props ? props : {};
-        this._name = props['name'];
-        this._cname = props['cname'];
-        this._id = props['id'];
-        this._sceneId = props['sceneId'];
-        this._value = props['value'];
-        this._keepLoaded = props['keeploaded'];
-        this._type = Number(props['type']);
-        this._globalsrc = props['globalsrc'];
-        this._xmlparams = props;
+        _super.call(this, props);
+        this._isItemCall = true;
     }
     /**
-     * param: (value: string)
-     * ```
-     * return: Promise<Item>
-     * ```
+     * param: (event: string,  handler: Function)
      *
-     * Sets the name of the item.
+     * Allows listening to events per instance.
+     * Currently there are only two:
+     * `item-changed` and `item-destroyed`.
      *
-     * *Chainable.*
+     * Item change is triggered thru any property change:
+     * - via js(source plugin/extension),
+     * - via visibility-toggling through the sources list,
+     * - or via the source properties dialog
      *
-     * #### Usage
-     *
-     * ```javascript
-     * item.setName('newNameHere').then(function(item) {
-     *   // Promise resolves with same Item instance when name has been set
-     *   return item.getName();
-     * }).then(function(name) {
-     *   // 'name' should be the updated value by now.
-     * });
-     * ```
-     */
-    Item.prototype.setName = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            _this._name = value;
-            if (version_1.versionCompare(version_1.getVersion())
-                .is
-                .lessThan(version_1.minVersion)) {
-                item_1.Item.set('prop:name', _this._name, _this._id).then(function () {
-                    resolve(_this);
-                });
-            }
-            else {
-                item_1.Item.get('itemlist', _this._id).then(function (itemlist) {
-                    var promiseArray = [];
-                    var itemsArray = itemlist.split(',');
-                    itemsArray.forEach(function (itemId) {
-                        promiseArray.push(new Promise(function (itemResolve) {
-                            item_1.Item.set('prop:name', _this._name, itemId).then(function () {
-                                itemResolve(true);
-                            });
-                        }));
-                    });
-                    Promise.all(promiseArray).then(function () {
-                        resolve(_this);
-                    });
-                });
-            }
-        });
-    };
-    /**
-     * return: Promise<string>
-     *
-     * Gets the name of the item.
-     *
-     * #### Usage
+     *  #### Usage:
      *
      * ```javascript
-     * item.getName().then(function(name) {
-     *   // Do something with the name
+     * let itemChange = function(...args) {
+     *   console.log('Item has changed');
+     * }
+     *
+     * let current;
+     * let items;
+     * xjs.Scene.getActiveScene()
+     * .then( scene => {
+     *   current = scene;
+     *   return current.getItems();
+     * }).then( list => {
+     *   items = list;
+     *   items[0].on('item-changed', itemChange);
      * });
      * ```
+     *
+     * Duplicate handlers are allowed.
      */
-    Item.prototype.getName = function () {
+    Item.prototype.on = function (event, handler) {
         var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:name', _this._id).then(function (val) {
-                _this._name = val;
-                resolve(val);
-            });
-        });
-    };
-    /**
-     * param: (value: string)
-     * ```
-     * return: Promise<Item>
-     * ```
-     *
-     * Sets the custom name of the item.
-     *
-     * The main difference between `setName` and `setCustomName` is that the CustomName
-     * can be edited by users using XBC through the bottom panel. `setName` on
-     * the other hand would update the item's internal name property.
-     *
-     * *Chainable.*
-     *
-     * #### Usage
-     *
-     * ```javascript
-     * item.setCustomName('newNameHere').then(function(item) {
-     *   // Promise resolves with same Item instance when custom name has been set
-     *   return item.getCustomName();
-     * }).then(function(name) {
-     *   // 'name' should be the updated value by now.
-     * });
-     * ```
-     */
-    Item.prototype.setCustomName = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            _this._cname = value;
-            item_1.Item.set('prop:cname', _this._cname, _this._id).then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    /**
-     * return: Promise<string>
-     *
-     * Gets the custom name of the item.
-     *
-     * #### Usage
-     *
-     * ```javascript
-     * item.getCustomName().then(function(name) {
-     *   // Do something with the name
-     * });
-     * ```
-     */
-    Item.prototype.getCustomName = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:cname', _this._id).then(function (val) {
-                _this._cname = val;
-                resolve(val);
-            });
-        });
-    };
-    /**
-     * return: Promise<string|XML>
-     *
-     * Gets a special string that refers to the item's main definition.
-     *
-     * This method can resolve with an XML object, which is an object generated by
-     * the framework. Call `toString()` to transform into an XML String. (See the
-     * documentation for `setValue` for more details.)
-     *
-     * #### Usage
-     *
-     * ```javascript
-     * item.getValue().then(function(value) {
-     *   // Do something with the value
-     * });
-     * ```
-     */
-    Item.prototype.getValue = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:item', _this._id).then(function (val) {
-                val = (val === 'null') ? '' : val;
-                if (val === '') {
-                    _this._value = '';
-                    resolve(val);
+        Item._emitter.on(event + '_' + this._id, handler);
+        // add additional functionality for events
+        var isItemSubscribeEventsSupported = version_1.versionCompare(version_1.getVersion()).
+            is.greaterThanOrEqualTo(version_1.itemSubscribeEventVersion);
+        if (event === 'item-changed' && isItemSubscribeEventsSupported &&
+            !environment_1.Environment.isSourceProps() && Item._subscriptions.indexOf('itempropchange_' + this._id) < 0) {
+            Item._subscriptions.push('itempropchange_' + this._id);
+            eventmanager_1.EventManager.subscribe('itempropchange_' + this._id, function () {
+                var eventArgs = [];
+                for (var _i = 0; _i < arguments.length; _i++) {
+                    eventArgs[_i - 0] = arguments[_i];
                 }
-                else {
-                    try {
-                        _this._value = xml_1.XML.parseJSON(json_1.JSON.parse(val));
-                        resolve(_this._value);
-                    }
-                    catch (e) {
-                        // value is not valid XML (it is a string instead)
-                        _this._value = val;
-                        resolve(val);
-                    }
+                (_a = Item._emitter).emit.apply(_a, ['item-changed_' + _this._id].concat(eventArgs));
+                var _a;
+            });
+        }
+        else if (event === 'item-destroyed' && isItemSubscribeEventsSupported &&
+            !environment_1.Environment.isSourceProps() && Item._subscriptions.indexOf('itemdestroyed_' + this._id) < 0) {
+            Item._subscriptions.push('itemdestroyed_' + this._id);
+            eventmanager_1.EventManager.subscribe('itemdestroyed_' + this._id, function () {
+                var eventArgs = [];
+                for (var _i = 0; _i < arguments.length; _i++) {
+                    eventArgs[_i - 0] = arguments[_i];
                 }
+                (_a = Item._emitter).emit.apply(_a, ['item-destroyed_' + _this._id].concat(eventArgs));
+                var _a;
             });
-        });
+        }
     };
     /**
-     * param: (value: string)
-     * ```
-     * return: Promise<Item>
-     * ```
+     * param: (event: string,  handler: Function)
      *
-     * Set the item's main definition; this special string defines the item's
-     * "identity". Each type of item requires a different format for this value.
+     * Removes specificied event handler bound by `on`.
+     * Note that this can only be done for named function handlers.
      *
-     * *Chainable.*
-     *
-     * **WARNING:**
-     * Please do note that using this method COULD break the current item, possibly modifying
-     * its type IF you set an invalid string for the current item.
-     *
-     * #### Possible values by item type
-     * - FILE - path/URL
-     * - LIVE - Device ID
-     * - BITMAP - path
-     * - SCREEN - XML string
-     * - FLASHFILE - path
-     * - GAMESOURCE - XML string
-     * - HTML - path/URL or html:<plugin>
-     *
-     * #### Usage
+     *  #### Usage:
      *
      * ```javascript
-     * item.setValue('@DEVICE:PNP:\\?\USB#VID_046D&amp;PID_082C&amp;MI_02#6&amp;16FD2F8D&amp;0&amp;0002#{65E8773D-8F56-11D0-A3B9-00A0C9223196}\GLOBAL')
-     *   .then(function(item) {
-     *   // Promise resolves with same Item instance
+     * let itemChange = function(...args) {
+     *   console.log('Item has changed');
+     * }
+     *
+     * let current;
+     * let items;
+     * xjs.Scene.getActiveScene()
+     * .then( scene => {
+     *   current = scene;
+     *   return current.getItems();
+     * }).then( list => {
+     *   items = list;
+     *   items[0].on('item-changed', itemChange);
+     *   setTimeout( ()=> {
+     *     items[0].off('item-changed', itemChange);
+     *   }, 10000);
      * });
      * ```
      */
-    Item.prototype.setValue = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            var val = (typeof value === 'string') ?
-                value : value.toString();
-            if (typeof value !== 'string') {
-                _this._value = json_1.JSON.parse(val);
-            }
-            else {
-                _this._value = val;
-            }
-            item_1.Item.set('prop:item', val, _this._id).then(function () {
-                resolve(_this);
-            });
-        });
+    Item.prototype.off = function (event, handler) {
+        Item._emitter.off(event + '_' + this._id, handler);
     };
     /**
-     * return: Promise<boolean>
+     * return: Promise<Item[]>
      *
-     * Check if item is kept loaded in memory
+     * Gets the list of linked items of the current Item.
+     * Linked items are items linked to a single source.
      *
      * #### Usage
      *
      * ```javascript
-     * item.getKeepLoaded().then(function(isLoaded) {
+     * xjs.Item.getItemList().then(function(items) {
+     *   for (var i = 0 ; i < items.length ; i++) {
+     *     // Manipulate each item here
+     *     items[i].setKeepAspectRatio(true);
+     *   }
+     * })
+     * ```
+     *
+     * This is simply a shortcut to:
+     * `xjs.Item.getCurrentSource()` -> `source.getItemList()`
+     */
+    Item.getItemList = function () {
+        return new Promise(function (resolve) {
+            resolve(source_1.Source.getItemList());
+        });
+    };
+    /**
+     * return: Promise<Number>
+     *
+     * Get the frames rendered per second of an item
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * item.getFPS().then(function(fps) {
      *   // The rest of your code here
      * });
      * ```
      */
-    Item.prototype.getKeepLoaded = function () {
+    Item.prototype.getFPS = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            item_1.Item.get('prop:keeploaded', _this._id).then(function (val) {
-                _this._keepLoaded = (val === '1');
-                resolve(_this._keepLoaded);
+            var initial;
+            item_1.Item.get('stats:frames', _this._id).then(function (frames) {
+                initial = (frames === 'null' || frames === '') ? 0 : Number(frames);
+                return new Promise(function (innerResolve) {
+                    setTimeout(innerResolve, 1000);
+                });
+            }).then(function () {
+                return item_1.Item.get('stats:frames', _this._id);
+            }).then(function (frames) {
+                var final = (frames === 'null' || frames === '') ? 0 : Number(frames);
+                resolve(final - initial);
             });
-        });
-    };
-    /**
-     * param: (value: boolean)
-     * ```
-     * return: Promise<Item>
-     * ```
-     *
-     * Set Keep loaded option to ON or OFF
-     *
-     * Items with Keep loaded set to ON would emit `scene-load` event each time
-     * the active scene switches to the item's current scene.
-     *
-     * *Chainable.*
-     *
-     * #### Usage
-     *
-     * ```javascript
-     * item.setKeepLoaded(true).then(function(item) {
-     *   // Promise resolves with same Item instance
-     * });
-     * ```
-     */
-    Item.prototype.setKeepLoaded = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            _this._keepLoaded = value;
-            _this._globalsrc = value;
-            item_1.Item.set('prop:globalsrc', (_this._globalsrc ? '1' : '0'), _this._id);
-            item_1.Item.set('prop:keeploaded', (_this._keepLoaded ? '1' : '0'), _this._id)
-                .then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    /**
-     * return: Promise<ItemTypes>
-     *
-     * Get the type of the item
-     *
-     * #### Usage
-     *
-     * ```javascript
-     * item.getType().then(function(type) {
-     *   // The rest of your code here
-     * });
-     * ```
-     */
-    Item.prototype.getType = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:type', _this._id).then(function (val) {
-                _this._type = ItemTypes[ItemTypes[Number(val)]];
-                resolve(_this._type);
-            });
-        });
-    };
-    /**
-     * return: Promise<string>
-     *
-     * Get the ID of the item
-     *
-     * #### Usage
-     *
-     * ```javascript
-     * item.getId().then(function(id) {
-     *   // The rest of your code here
-     * });
-     * ```
-     */
-    Item.prototype.getId = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            resolve(_this._id);
-        });
-    };
-    /**
-     * return: Promise<number>
-     *
-     * Get (1-indexed) Scene ID where the item is loaded
-     *
-     * #### Usage
-     *
-     * ```javascript
-     * item.getSceneId().then(function(id) {
-     *   // The rest of your code here
-     * });
-     * ```
-     */
-    Item.prototype.getSceneId = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            resolve(Number(_this._sceneId) + 1);
         });
     };
     /**
@@ -5719,37 +4033,40 @@ var Item = (function () {
             item_1.Item.get('prop:viewid', _this._id).then(function (viewId) {
                 var view = ViewTypes.MAIN;
                 if (viewId === '1') {
-                    var preview = app_1.App.getGlobalProperty('preview_editor_opened');
-                    view = preview === '1' ? ViewTypes.PREVIEW : ViewTypes.THUMBNAIL;
+                    var preview;
+                    app_1.App.getGlobalProperty('preview_editor_opened').then(function (result) {
+                        preview = result;
+                        view = preview === '1' ? ViewTypes.PREVIEW : ViewTypes.THUMBNAIL;
+                        resolve(view);
+                    });
                 }
-                resolve(view);
+                else {
+                    resolve(view);
+                }
             });
         });
     };
     /**
-     * return: Promise<string>
+     * return: Promise<number>
      *
-     * Get the Source ID of the item.
-     * *Available only on XSplit Broadcaster verions higher than 2.8.1603.0401*
+     * Get (1-indexed) Scene ID where the source is loaded
      *
      * #### Usage
      *
      * ```javascript
-     * item.getSourceId().then(function(id) {
+     * source.getSceneId().then(function(id) {
      *   // The rest of your code here
      * });
      * ```
      */
-    Item.prototype.getSourceId = function () {
+    Item.prototype.getSceneId = function () {
         var _this = this;
-        return new Promise(function (resolve, reject) {
-            if (version_1.versionCompare(version_1.getVersion()).is.lessThan(version_1.minVersion)) {
-                reject(new Error('Only available on versions above ' + version_1.minVersion));
+        return new Promise(function (resolve) {
+            if (String(_this._sceneId) === 'i12') {
+                resolve('i12');
             }
             else {
-                item_1.Item.get('prop:srcid', _this._id).then(function (srcid) {
-                    resolve(srcid);
-                });
+                resolve(Number(_this._sceneId) + 1);
             }
         });
     };
@@ -5777,195 +4094,235 @@ var Item = (function () {
         return xml_1.XML.parseJSON(item);
     };
     /**
+     * param: (options: {linked?:<boolean>, scene?:<Scene> })
+     * ```
      * return: Promise<Item>
+     * ```
+     * Duplicate an item into the current scene or to a specified scene as
+     * Linked or Unlinked.
      *
-     * > #### For Deprecation
-     * This method is deprecated and will be removed soon.
-     * Please use {@link #core/Item#getItemList getItemList} instead.
+     * Linked items would generally have a single source, and any changes in the
+     * property of an item would be applied to all linked items.
      *
-     * Get the current source (when function is called by sources), or the source
-     * that was right-clicked to open the source properties window (when function is called
-     * from the source properties window)
+     *  *Chainable*
      *
      * #### Usage
-     *
      * ```javascript
-     * xjs.Source.getCurrentSource().then(function(source) {
-     *   // This will fetch the current source (the plugin)
-     * }).catch(function(err) {
-     *   // Handle the error here. Errors would only occur
-     *   // if we try to execute this method on Extension plugins
-     * });
+     * // item pertains to an actual Item instance
+     * // Sample 1
+     * item.duplicate() // duplicate selected item to the current scene as unlinked
+     *```
+     * Duplicate the selected item to a specific scene and set it to be linked to
+     * a single source with the original item.
+     * ```javascript
+     * // Sample 2
+     * var toScene = xjs.Scene.getById(2)
+     * item.duplicate({linked:true, scene:toScene})
+     *
      * ```
      */
-    Item.getCurrentSource = function () {
-        return new Promise(function (resolve, reject) {
-            console.warn('Warning! getCurrentSource is deprecated and will be ' +
-                'removed soon. Please use getItemList instead. (Only works for ' +
-                'XSplit Broadcaster versions above 2.8.xxxx.xxxx');
-            if (environment_1.Environment.isExtension()) {
-                reject(Error('Extensions do not have sources ' +
-                    'associated with them.'));
-            }
-            else if ((environment_1.Environment.isSourcePlugin() || environment_1.Environment.isSourceConfig()) &&
-                version_1.versionCompare(version_1.getVersion())
-                    .is
-                    .greaterThan(version_1.minVersion)) {
-                Item.getItemList().then(function (items) {
-                    if (items.length > 0) {
-                        resolve(items[0]);
-                    }
-                    else {
-                        reject(Error('Cannot get item list'));
-                    }
-                });
-            }
-            else if (environment_1.Environment.isSourcePlugin() || environment_1.Environment.isSourceConfig()) {
-                scene_1.Scene.searchItemsById(item_1.Item.getBaseId()).then(function (item) {
-                    resolve(item);
-                });
-            }
-        });
-    };
-    /**
-     * return: Promise<Item[]>
-     *
-     * Get the Item List of the current source
-     *
-     * #### Usage
-     *
-     * ```javascript
-     * xjs.Item.getItemList().then(function(item) {
-     *   // This will fetch the item list of the current source
-     * }).catch(function(err) {
-     *   // Handle the error here. Errors would only occur
-     *   // if we try to execute this method on Extension plugins
-     * });
-     * ```
-     */
-    Item.getItemList = function () {
-        return new Promise(function (resolve, reject) {
-            if (environment_1.Environment.isExtension()) {
-                reject(Error('Extensions do not have sources associated with them.'));
-            }
-            else if (version_1.versionCompare(version_1.getVersion())
-                .is
-                .lessThan(version_1.minVersion)) {
-                scene_1.Scene.searchItemsById(item_1.Item.getBaseId()).then(function (item) {
-                    var itemArray = [];
-                    itemArray.push(item);
-                    resolve(itemArray);
-                });
-            }
-            else if (environment_1.Environment.isSourcePlugin() || environment_1.Environment.isSourceConfig()) {
-                item_1.Item.get('itemlist').then(function (itemlist) {
-                    var promiseArray = [];
-                    var itemsArray = itemlist.split(',');
-                    itemsArray.forEach(function (itemId) {
-                        promiseArray.push(new Promise(function (itemResolve) {
-                            scene_1.Scene.searchItemsById(itemId).then(function (item) {
-                                itemResolve(item);
-                            });
-                        }));
-                    });
-                    Promise.all(promiseArray).then(function (results) {
-                        resolve(results);
-                    });
-                });
-            }
-        });
-    };
-    /**
-     * return: Promise<Item[]>
-     *
-     * Get the item list of the attached item. This is useful when an item is
-     * an instance of a global source, with multiple other items having the same
-     * source as the current item.
-     *
-     * #### Usage
-     *
-     * ```javascript
-     * // item pertains to an actual item instance
-     * item.getItemList().then(function(item) {
-     *   // This will fetch the item list of the current item
-     * }).catch(function(err) {
-     *   // Handle the error here. Errors would only occur
-     *   // if we try to execute this method on Extension plugins
-     * });
-     * ```
-     */
-    Item.prototype.getItemList = function () {
+    Item.prototype.duplicate = function (options) {
         var _this = this;
         return new Promise(function (resolve, reject) {
             if (version_1.versionCompare(version_1.getVersion())
                 .is
-                .lessThan(version_1.minVersion)) {
-                scene_1.Scene.searchItemsById(_this._id).then(function (item) {
-                    var itemArray = [];
-                    itemArray.push(item);
-                    resolve(itemArray);
+                .lessThan(version_1.globalsrcMinVersion)) {
+                app_1.App.callFunc('additem', _this.toXML().toString()).then(function () {
+                    resolve(_this);
                 });
             }
             else {
-                item_1.Item.get('itemlist', _this._id).then(function (itemlist) {
-                    var promiseArray = [];
-                    var itemsArray = itemlist.split(',');
-                    itemsArray.forEach(function (itemId) {
-                        promiseArray.push(new Promise(function (itemResolve) {
-                            scene_1.Scene.searchItemsById(itemId).then(function (item) {
-                                itemResolve(item);
+                if (options) {
+                    if (options.linked) {
+                        item_1.Item.set('prop:keeploaded', '1', _this._id);
+                    }
+                    if (options.scene !== undefined && options.linked !== undefined) {
+                        if (options.scene instanceof scene_1.Scene) {
+                            options.scene.getSceneNumber().then(function (id) {
+                                app_1.App.callFunc("link:" + (options.linked ? 1 : 0) + "|s:" + id + "|additem", _this.toXML().toString())
+                                    .then(function () {
+                                    resolve(_this);
+                                });
                             });
-                        }));
+                        }
+                        else {
+                            reject(Error('Invalid parameters. Accepted format is "(options: {linked?:<boolean>, scene?:<Scene>})"'));
+                        }
+                    }
+                    else if (options.linked === undefined) {
+                        if (options.scene instanceof scene_1.Scene) {
+                            options.scene.getSceneNumber().then(function (id) {
+                                app_1.App.callFunc("link:0|s:" + id + "|additem", _this.toXML().toString())
+                                    .then(function () {
+                                    resolve(_this);
+                                });
+                            });
+                        }
+                        else {
+                            reject(Error('Invalid parameters. Accepted format is:: "(options: {linked?:<boolean>, scene?:<Scene>})"'));
+                        }
+                    }
+                    else if (options.scene === undefined) {
+                        app_1.App.callFunc("link:" + (options.linked ? 1 : 0) + "|s:" + _this._sceneId + "|additem", _this.toXML().toString())
+                            .then(function () {
+                            resolve(_this);
+                        });
+                    }
+                }
+                else {
+                    app_1.App.callFunc('link:0|additem', _this.toXML().toString())
+                        .then(function () {
+                        resolve(_this);
                     });
-                    Promise.all(promiseArray).then(function (results) {
-                        resolve(results);
-                    });
-                });
+                }
             }
         });
     };
     /**
-     *  return: Promise<Item>
+     * return: Promise<Item>
      *
-     *  Refreshes the specified item.
+     * Unlinks selected item.
      *
-     *  #### Usage
-     *  ```javascript
-     *  // Sample 1: let item refresh itself
-     *  xjs.Item.getItemList().then(function(item) {
-     *    item.refresh(); // execution of JavaScript halts because of refresh
-     *  });
+     * Unlinks an item to the source of other linked items and renders its
+     * own source.
      *
-     *  // Sample 2: refresh some other item 'otherItem'
-     *  otherItem.refresh().then(function(item) {
-     *    // further manipulation of other item goes here
-     *  });
-     *  ```
+     * #### Usage
+     * ```javascript
+     * item.unlink()
+     * ```
+     *
+     * Note: Once you unlink an Item, there's still no method to reverse the
+     * process.
+     *
      */
-    Item.prototype.refresh = function () {
+    Item.prototype.unlink = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            item_1.Item.set('refresh', '', _this._id).then(function () {
+            item_1.Item.set('prop:globalsrc', '0', _this._id)
+                .then(function () {
                 resolve(_this);
             });
         });
     };
     /**
-     * Duplicate current item. Will duplicate item into the current scene
+     * return: Promise<boolean>
+     *
+     * Removes selected item
+     *
+     * #### Usage
+     * ```javascript
+     * item.remove()
+     * ```
      */
-    Item.prototype.duplicate = function () {
+    Item.prototype.remove = function () {
         var _this = this;
         return new Promise(function (resolve) {
-            app_1.App.callFunc('additem', _this.toXML().toString()).then(function () {
+            item_1.Item.set('remove', '', _this._id)
+                .then(function () {
                 resolve(true);
             });
         });
     };
+    /**
+     * return: Promise<Source>
+     *
+     * Gets the Source of an item, linked items would only have 1 source.
+     *
+     * *Chainable*
+     *
+     * #### Usage
+     * ```javascript
+     * item.getSource().then(function(source) {
+     *   //Manipulate source here
+     *   source.setName('New Name')
+     * })
+     * ```
+     */
+    Item.prototype.getSource = function () {
+        var _this = this;
+        var uniqueSource = [];
+        var uniqueObj = {};
+        var _xmlparams;
+        var _type;
+        var _srcId;
+        var promiseArray = [];
+        var _thisItem = this;
+        return new Promise(function (resolve, reject) {
+            _this.getItemList().then(function (items) {
+                for (var i = 0; i < items.length; i++) {
+                    for (var key in items[i]) {
+                        if (key === '_srcId') {
+                            uniqueObj[items[i][key]] = items[i];
+                        }
+                    }
+                }
+                for (var j in uniqueObj) {
+                    if (uniqueObj.hasOwnProperty(j)) {
+                        uniqueSource.push(uniqueObj[j]);
+                    }
+                }
+                var typePromise = function (index) { return new Promise(function (typeResolve) {
+                    var source = uniqueSource[index];
+                    var params = source['_xmlparams'];
+                    var type = Number(source['_type']);
+                    if (type === isource_1.ItemTypes.GAMESOURCE) {
+                        typeResolve(new game_1.GameSource(params));
+                    }
+                    else if ((type === isource_1.ItemTypes.HTML || type === isource_1.ItemTypes.FILE) &&
+                        source['_name'].indexOf('Video Playlist') === 0 &&
+                        source['FilePlaylist'] !== '') {
+                        typeResolve(new videoplaylist_1.VideoPlaylistSource(params));
+                    }
+                    else if (type === isource_1.ItemTypes.HTML) {
+                        typeResolve(new html_1.HtmlSource(params));
+                    }
+                    else if (type === isource_1.ItemTypes.SCREEN) {
+                        typeResolve(new screen_1.ScreenSource(params));
+                    }
+                    else if (type === isource_1.ItemTypes.BITMAP ||
+                        type === isource_1.ItemTypes.FILE &&
+                            /\.gif$/.test(source['item'])) {
+                        typeResolve(new image_1.ImageSource(params));
+                    }
+                    else if (type === isource_1.ItemTypes.FILE &&
+                        /\.(gif|xbs)$/.test(source['item']) === false &&
+                        /^(rtsp|rtmp):\/\//.test(source['item']) === false &&
+                        new RegExp(media_1.MediaTypes.join('|')).test(source['item']) === true) {
+                        typeResolve(new media_1.MediaSource(source));
+                    }
+                    else if (Number(source['type']) === isource_1.ItemTypes.LIVE &&
+                        source['item'].indexOf('{33D9A762-90C8-11D0-BD43-00A0C911CE86}') === -1) {
+                        typeResolve(new camera_1.CameraSource(params));
+                    }
+                    else if (Number(source['type']) === isource_1.ItemTypes.LIVE &&
+                        source['item'].indexOf('{33D9A762-90C8-11D0-BD43-00A0C911CE86}') !== -1) {
+                        typeResolve(new audio_1.AudioSource(params));
+                    }
+                    else if (Number(source['type']) === isource_1.ItemTypes.FLASHFILE) {
+                        typeResolve(new flash_1.FlashSource(params));
+                    }
+                    else {
+                        typeResolve(new source_1.Source(params));
+                    }
+                }); };
+                if (Array.isArray(uniqueSource)) {
+                    for (var i = 0; i < uniqueSource.length; i++) {
+                        promiseArray.push(typePromise(i));
+                    }
+                }
+                Promise.all(promiseArray).then(function (results) {
+                    resolve(results[0]);
+                });
+            });
+        });
+    };
+    Item._emitter = new eventemitter_1.EventEmitter();
+    Item._subscriptions = [];
     return Item;
-})();
+})(source_1.Source);
 exports.Item = Item;
-mixin_1.applyMixins(Item, [ilayout_1.ItemLayout]);
-},{"../../internal/app":38,"../../internal/item":42,"../../internal/util/json":43,"../../internal/util/mixin":44,"../../internal/util/version":45,"../../internal/util/xml":46,"../environment":5,"../scene":26,"./ilayout":18}],22:[function(require,module,exports){
+mixin_1.applyMixins(Item, [isource_1.iSource, ilayout_1.ItemLayout]);
+},{"../../internal/app":49,"../../internal/eventmanager":50,"../../internal/item":54,"../../internal/util/json":56,"../../internal/util/mixin":58,"../../internal/util/version":59,"../../internal/util/xml":60,"../../util/eventemitter":71,"../environment":4,"../scene":23,"../source/audio":24,"../source/camera":25,"../source/flash":27,"../source/game":28,"../source/html":29,"../source/image":37,"../source/isource":41,"../source/media":43,"../source/screen":44,"../source/source":45,"../source/videoplaylist":46,"./ilayout":14}],17:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var item_1 = require('../../internal/item');
 var transition_1 = require('../transition');
@@ -6033,7 +4390,7 @@ var ItemTransition = (function () {
     return ItemTransition;
 })();
 exports.ItemTransition = ItemTransition;
-},{"../../internal/item":42,"../transition":37}],23:[function(require,module,exports){
+},{"../../internal/item":54,"../transition":48}],18:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -6042,16 +4399,15 @@ var __extends = (this && this.__extends) || function (d, b) {
     d.prototype = new __();
 };
 var mixin_1 = require('../../internal/util/mixin');
-var item_1 = require('../../internal/item');
 var ilayout_1 = require('./ilayout');
 var icolor_1 = require('./icolor');
 var ichroma_1 = require('./ichroma');
 var ieffects_1 = require('./ieffects');
 var itransition_1 = require('./itransition');
-var iplayback_1 = require('./iplayback');
-var iaudio_1 = require('./iaudio');
-var item_2 = require('./item');
-var json_1 = require('../../internal/util/json');
+var iplayback_1 = require('../source/iplayback');
+var iaudio_1 = require('../source/iaudio');
+var item_1 = require('./item');
+var imedia_1 = require('../source/imedia');
 /**
  * The MediaItem class represents a playable media file.
  *
@@ -6061,8 +4417,8 @@ var json_1 = require('../../internal/util/json');
  * {@link #core/IItemColor Core/IItemColor},
  * {@link #core/IItemLayout Core/IItemLayout},
  * {@link #core/IItemTransition Core/IItemTransition},
- * {@link #core/IItemAudio Core/IItemAudio},
- * {@link #core/IItemPlayback Core/IItemPlayback}
+ * {@link #core/IAudio Core/IAudio},
+ * {@link #core/ISourcePlayback Core/ISourcePlayback}
  *
  *  All methods marked as *Chainable* resolve with the original `MediaItem`
  *  instance.
@@ -6072,81 +4428,12 @@ var MediaItem = (function (_super) {
     function MediaItem() {
         _super.apply(this, arguments);
     }
-    /**
-     * return: Promise<object>
-     *
-     * Gets file information such as codecs, bitrate, resolution, etc.
-     *
-     * sample file info object format:
-     *
-     * {
-     *  "audio": {
-     *    "duration":"1436734690",
-     *    "samplerate":"44100",
-     *    "bitrate":"128000",
-     *    "codec":"mp3"},
-     *  "video":{
-     *    "frameduration":"333670",
-     *    "bitrate":"1132227",
-     *    "duration":"1436436440",
-     *    "height":"240",
-     *    "width":"320",
-     *    "codec":"mpeg4"}
-     * }
-     *
-     * #### Usage
-     *
-     * ```javascript
-     * mediaItem.getFileInfo().then(function(value) {
-     *   // Do something with the value
-     *   var audioCodec;
-     *   if (typeof value['audio'] !== 'undefined' && typeof value['audio']['codec']) {
-     *     audioCodec = value['audio']['codec'];
-     *   }
-     * });
-     * ```
-     */
-    MediaItem.prototype.getFileInfo = function () {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            item_1.Item.get('FileInfo', _this._id).then(function (val) {
-                try {
-                    var fileInfoObj = {};
-                    var fileInfoJXON = json_1.JSON.parse(val);
-                    if (typeof fileInfoJXON['children'] !== 'undefined'
-                        && fileInfoJXON['children'].length > 0) {
-                        var fileInfoChildren = fileInfoJXON['children'];
-                        for (var i = fileInfoChildren.length - 1; i >= 0; i--) {
-                            var child = fileInfoChildren[i];
-                            var childObj = {};
-                            var childObjKeys = Object.keys(child);
-                            for (var j = childObjKeys.length - 1; j >= 0; j--) {
-                                var key = childObjKeys[j];
-                                if (key !== 'value' && key !== 'tag') {
-                                    childObj[key] = child[key];
-                                }
-                            }
-                            var tag = child['tag'];
-                            fileInfoObj[tag] = childObj;
-                        }
-                        resolve(fileInfoObj);
-                    }
-                    else {
-                        resolve(fileInfoObj);
-                    }
-                }
-                catch (e) {
-                    reject(Error('Error retrieving file information'));
-                }
-            });
-        });
-    };
     return MediaItem;
-})(item_2.Item);
+})(item_1.Item);
 exports.MediaItem = MediaItem;
-mixin_1.applyMixins(MediaItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma,
-    itransition_1.ItemTransition, iplayback_1.ItemPlayback, iaudio_1.ItemAudio, ieffects_1.ItemEffect]);
-},{"../../internal/item":42,"../../internal/util/json":43,"../../internal/util/mixin":44,"./iaudio":13,"./ichroma":14,"./icolor":15,"./ieffects":17,"./ilayout":18,"./iplayback":20,"./item":21,"./itransition":22}],24:[function(require,module,exports){
+mixin_1.applyMixins(MediaItem, [item_1.Item, ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma,
+    itransition_1.ItemTransition, iplayback_1.SourcePlayback, iaudio_1.Audio, ieffects_1.ItemEffect, imedia_1.SourceMedia]);
+},{"../../internal/util/mixin":58,"../source/iaudio":30,"../source/imedia":38,"../source/iplayback":39,"./ichroma":11,"./icolor":12,"./ieffects":13,"./ilayout":14,"./item":16,"./itransition":17}],19:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -6155,16 +4442,13 @@ var __extends = (this && this.__extends) || function (d, b) {
     d.prototype = new __();
 };
 var mixin_1 = require('../../internal/util/mixin');
-var item_1 = require('../../internal/item');
 var ilayout_1 = require('./ilayout');
 var icolor_1 = require('./icolor');
 var ichroma_1 = require('./ichroma');
 var ieffects_1 = require('./ieffects');
 var itransition_1 = require('./itransition');
-var item_2 = require('./item');
-var rectangle_1 = require('../../util/rectangle');
-var json_1 = require('../../internal/util/json');
-var xml_1 = require('../../internal/util/xml');
+var item_1 = require('./item');
+var iscreen_1 = require('../source/iscreen');
 /**
  * The ScreenItem class represents a screen capture item.
  *
@@ -6184,302 +4468,12 @@ var ScreenItem = (function (_super) {
     function ScreenItem() {
         _super.apply(this, arguments);
     }
-    /**
-     * return: Promise<Rectangle>
-     *
-     * Gets the Capture Area of the Screen Capture Item. Returns a Rectangle
-     * object.
-     *
-     * See also: {@link #util/Rectangle Util/Rectangle}
-     */
-    ScreenItem.prototype.getCaptureArea = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            _this.getValue().then(function (val) {
-                if (!(val instanceof xml_1.XML)) {
-                    resolve(rectangle_1.Rectangle.fromCoordinates(0, 0, 0, 0));
-                }
-                else {
-                    var _value = json_1.JSON.parse(val);
-                    resolve(rectangle_1.Rectangle.fromCoordinates(Number(_value['left']), Number(_value['top']), Number(_value['width']) + Number(_value['left']), Number(_value['height']) + Number(_value['top'])));
-                }
-            });
-        });
-    };
-    /**
-     * param: Promise<Rectangle>
-     * ```
-     * return: Promise<ScreenItem>
-     * ```
-     *
-     * Sets the Window Capture Area of the Screen Capture Item.
-     *
-     * *Chainable.*
-     *
-     * See also: {@link #util/Rectangle Util/Rectangle}
-     */
-    ScreenItem.prototype.setCaptureArea = function (dimension) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            _this.getValue().then(function (val) {
-                return new Promise(function (iResolve) {
-                    item_1.Item.get('screenresolution', _this._id).then(function (res) {
-                        var _res = res.split(',');
-                        iResolve({
-                            value: val,
-                            res: rectangle_1.Rectangle.fromCoordinates(Number(_res[0]), Number(_res[1]), Number(_res[2]), Number(_res[3]))
-                        });
-                    });
-                });
-            }).then(function (obj) {
-                var _config = new json_1.JSON();
-                if (!(obj.value instanceof xml_1.XML)) {
-                    _config['tag'] = 'screen';
-                    _config['module'] = '';
-                    _config['window'] = '';
-                    _config['hwnd'] = '0';
-                    _config['wclient'] = '0';
-                    _config['left'] = '0';
-                    _config['top'] = '0';
-                    _config['width'] = '0';
-                    _config['height'] = '0';
-                }
-                else {
-                    _config = json_1.JSON.parse(obj.value);
-                }
-                _config['left'] = dimension.getLeft() >= obj.res.getLeft() ?
-                    dimension.getLeft() : Number(_config['left']) >= obj.res.getLeft() ?
-                    _config['left'] : obj.res.getLeft();
-                _config['top'] = dimension.getTop() >= obj.res.getTop() ?
-                    dimension.getTop() : Number(_config['top']) >= obj.res.getTop() ?
-                    _config['top'] : obj.res.getTop();
-                _config['width'] = dimension.getWidth() <= obj.res.getWidth() ?
-                    dimension.getWidth() : Number(_config['width']) <=
-                    obj.res.getWidth() ? _config['width'] : obj.res.getWidth();
-                _config['height'] = dimension.getHeight() <= obj.res.getHeight() ?
-                    dimension.getHeight() : Number(_config['height']) <=
-                    obj.res.getHeight() ? _config['height'] : obj.res.getHeight();
-                _this.setValue(xml_1.XML.parseJSON(_config)).then(function () {
-                    resolve(_this);
-                });
-            });
-        });
-    };
-    /**
-     * return: Promise<boolean>
-     *
-     * Checks if the Screen Capture Item only captures the
-     * Client area (does not capture the title bar, menu bar, window border, etc.)
-     */
-    ScreenItem.prototype.isClientArea = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            _this.getValue().then(function (val) {
-                if (!(val instanceof xml_1.XML)) {
-                    resolve(false);
-                }
-                else {
-                    var _value = json_1.JSON.parse(val);
-                    resolve(_value['wclient'] === '1');
-                }
-            });
-        });
-    };
-    /**
-     * param: Promise<boolean>
-     * ```
-     * return: Promise<ScreenItem>
-     * ```
-     *
-     * Set the Screen Capture to capture the Client area only or include
-     * the titlebar, menu bar, window border, etc.
-     */
-    ScreenItem.prototype.setClientArea = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            _this.getValue().then(function (val) {
-                var _config = new json_1.JSON();
-                if (!(val instanceof xml_1.XML)) {
-                    _config['tag'] = 'screen';
-                    _config['module'] = '';
-                    _config['window'] = '';
-                    _config['hwnd'] = '0';
-                    _config['wclient'] = '0';
-                    _config['left'] = '0';
-                    _config['top'] = '0';
-                    _config['width'] = '0';
-                    _config['height'] = '0';
-                }
-                else {
-                    _config = json_1.JSON.parse(val);
-                }
-                _config['wclient'] = (value ? '1' : '0');
-                _this.setValue(xml_1.XML.parseJSON(_config)).then(function () {
-                    resolve(_this);
-                });
-            });
-        });
-    };
-    /**
-     * return: Promise<boolean>
-     *
-     * Checks if the Screen Capture Item captures a window based on
-     * the window's title.
-     */
-    ScreenItem.prototype.isStickToTitle = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:ScrCapTrackWindowTitle', _this._id).then(function (val) {
-                resolve(val === '0');
-            });
-        });
-    };
-    /**
-     * param: Promise<boolean>
-     * ```
-     * return: Promise<ScreenItem>
-     * ```
-     *
-     * Set the Screen Capture to capture the window based on the window title.
-     * Useful when capturing programs with multiple tabs, for you to only
-     * capture a particular tab.
-     */
-    ScreenItem.prototype.setStickToTitle = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:ScrCapTrackWindowTitle', value ? '0' : '1', _this._id)
-                .then(function () {
-                resolve(_this);
-            });
-        });
-    };
-    /**
-     * return Promise<boolean>
-     *
-     * Checks if the Screen Capture layered window is selected.
-     */
-    ScreenItem.prototype.getCaptureLayered = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:ScrCapLayered', _this._id).then(function (val) {
-                resolve(val === '1');
-            });
-        });
-    };
-    /**
-     * param: (value: boolean)
-     * ```
-     * return Promise<ScreenItem>
-     * ```
-     *
-     * Sets the Screen Capture Layered window
-     */
-    ScreenItem.prototype.setCaptureLayered = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:ScrCapLayered', value ? '1' : '0', _this._id).then(function (val) {
-                resolve(_this);
-            });
-        });
-    };
-    /**
-     * return Promise<boolean>
-     *
-     * Checks if the Exclusive Window capture is selected.
-     */
-    ScreenItem.prototype.getOptimizedCapture = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:ScrCapOptCapture1', _this._id).then(function (val) {
-                resolve(val === '1');
-            });
-        });
-    };
-    /**
-     * param: (value: boolean)
-     * ```
-     * return Promise<ScreenItem>
-     * ```
-     *
-     * Sets the Exclusive Window capture.
-     */
-    ScreenItem.prototype.setOptimizedCapture = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:ScrCapOptCapture1', value ? '1' : '0', _this._id).then(function (val) {
-                resolve(_this);
-            });
-        });
-    };
-    /**
-     * return Promise<boolean>
-     *
-     * Checks if the Show mouse clicks is selected.
-     *
-     */
-    ScreenItem.prototype.getShowMouseClicks = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:ScrCapShowClicks', _this._id).then(function (val) {
-                resolve(val === '1');
-            });
-        });
-    };
-    /**
-     * param: (value: boolean)
-     * ```
-     * return Promise<ScreenItem>
-     * ```
-     *
-     * Sets the Show mouse clicks.
-     */
-    ScreenItem.prototype.setShowMouseClicks = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:ScrCapShowClicks', value ? '1' : '0', _this._id).then(function (val) {
-                resolve(_this);
-            });
-        });
-    };
-    /**
-     * return Promise<boolean>
-     *
-     * Checks if the Show mouse is selected.
-     *
-     */
-    ScreenItem.prototype.getShowMouse = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:ScrCapShowMouse', _this._id).then(function (val) {
-                resolve(val === '1');
-            });
-        });
-    };
-    /**
-     * param: (value: boolean)
-     * ```
-     * return Promise<ScreenItem>
-     * ```
-     *
-     * Sets the Show Mouse.
-     */
-    ScreenItem.prototype.setShowMouse = function (value) {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.set('prop:ScrCapShowMouse', value ? '1' : '0', _this._id).then(function (val) {
-                if (val === true) {
-                    item_1.Item.set('prop:ScrCapShowClicks', value ? '1' : '0', _this._id);
-                }
-                resolve(_this);
-            });
-        });
-    };
     return ScreenItem;
-})(item_2.Item);
+})(item_1.Item);
 exports.ScreenItem = ScreenItem;
 mixin_1.applyMixins(ScreenItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition,
-    ieffects_1.ItemEffect]);
-},{"../../internal/item":42,"../../internal/util/json":43,"../../internal/util/mixin":44,"../../internal/util/xml":46,"../../util/rectangle":60,"./ichroma":14,"./icolor":15,"./ieffects":17,"./ilayout":18,"./item":21,"./itransition":22}],25:[function(require,module,exports){
+    ieffects_1.ItemEffect, iscreen_1.iSourceScreen]);
+},{"../../internal/util/mixin":58,"../source/iscreen":40,"./ichroma":11,"./icolor":12,"./ieffects":13,"./ilayout":14,"./item":16,"./itransition":17}],20:[function(require,module,exports){
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
     function __() { this.constructor = d; }
@@ -6490,12 +4484,12 @@ var __extends = (this && this.__extends) || function (d, b) {
 var mixin_1 = require('../../internal/util/mixin');
 var ilayout_1 = require('./ilayout');
 var icolor_1 = require('./icolor');
-var item_1 = require('../../internal/item');
 var ichroma_1 = require('./ichroma');
 var itransition_1 = require('./itransition');
-var iconfig_1 = require('./iconfig');
-var item_2 = require('./item');
-var io_1 = require('../../util/io');
+var iconfig_1 = require('../source/iconfig');
+var item_1 = require('./item');
+var ivideoplaylist_1 = require('../source/ivideoplaylist');
+var iplayback_1 = require('../source/iplayback');
 /**
  * The VideoPlaylistItem class represents the VideoPlaylist item that has been
  * added to the stage.
@@ -6506,7 +4500,7 @@ var io_1 = require('../../util/io');
  * {@link #core/IItemColor Core/IItemColor},
  * {@link #core/IItemLayout Core/IItemLayout},
  * {@link #core/IItemTransition Core/IItemTransition},
- * {@link #core/IItemConfigurable Core/IItemConfigurable}
+ * {@link #core/ISourceConfigurable Core/ISourceConfigurable}
  *
  * ### Basic Usage
  *
@@ -6529,147 +4523,389 @@ var VideoPlaylistItem = (function (_super) {
     function VideoPlaylistItem() {
         _super.apply(this, arguments);
     }
-    /**
-     * return: Promise<string>
-     *
-     * Gets the now playing video of this VideoPlaylist item.
-     *
-     */
-    VideoPlaylistItem.prototype.getVideoNowPlaying = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:item', _this._id).then(function (playlist) {
-                var _playlist = String(playlist).slice(0, playlist.indexOf('*'));
-                resolve(_playlist);
-            });
-        });
-    };
-    /**
-     * param: (value: string|number)
-     *
-     * return: Promise<VideoPlaylistItem>
-     *
-     * Sets the now playing video of this VideoPlaylist item.
-     *
-     * ## Possible Values
-     * - STRING - file path
-     * - NUMBER - number|within the range of fileplaylist array length
-     *
-     */
-    VideoPlaylistItem.prototype.setVideoNowPlaying = function (value) {
-        var _this = this;
-        var file;
-        var _playlist;
-        return new Promise(function (resolve, reject) {
-            item_1.Item.get('prop:FilePlaylist', _this._id).then(function (playlist) {
-                _playlist = String(playlist).split('|');
-                for (var i = 0; i < _playlist.length; i++) {
-                    _playlist[i] = _playlist[i].slice(0, _playlist[i].indexOf('*'));
-                }
-                ;
-                return _playlist;
-            }).then(function (list) {
-                if (typeof value === 'string') {
-                    if (_playlist.indexOf(value) === -1) {
-                        reject(Error('File not found on Playlist.'));
-                    }
-                    else {
-                        var index = _playlist.indexOf(value);
-                        file = _playlist[index] + '*' + index;
-                        item_1.Item.set('prop:item', file, _this._id)
-                            .then(function (fileplaylist) {
-                            resolve(_this);
-                        });
-                    }
-                }
-                else if (typeof value === 'number' && value <= _playlist.length) {
-                    file = (_playlist[value] + '*' + value);
-                    item_1.Item.set('prop:item', file, _this._id)
-                        .then(function (fileplaylist) {
-                        resolve(this);
-                    });
-                }
-                else {
-                    reject(Error('Invalid value.'));
-                }
-                ;
-            });
-        });
-    };
-    ;
-    /**
-     * return: Promise<string[]>
-     *
-     * Gets the file paths of the playlist of this VideoPlaylist item.
-     *
-     */
-    VideoPlaylistItem.prototype.getVideoPlaylistItems = function () {
-        var _this = this;
-        return new Promise(function (resolve) {
-            item_1.Item.get('prop:FilePlaylist', _this._id).then(function (playlist) {
-                var _playlist = String(playlist).split('|');
-                for (var i = 0; i < _playlist.length; i++) {
-                    _playlist[i] = _playlist[i].slice(0, _playlist[i].indexOf('*'));
-                }
-                ;
-                resolve(_playlist);
-            });
-        });
-    };
-    ;
-    /**
-     * param: (file: string[])
-     *
-     * return: Promise<string>
-     *
-     * Sets the playlist of this VideoPlaylist item according to the specified
-     * file paths.
-     *
-     * This call would replace all the items on the playlist.
-     * The now playing item is also set to the first item of the new FilePlaylist.
-     *
-     */
-    VideoPlaylistItem.prototype.setVideoPlaylistItems = function (fileItems) {
-        var _this = this;
-        var fileString;
-        var filePromises = fileItems.map(function (filename) {
-            return io_1.IO.getVideoDuration(filename);
-        });
-        return new Promise(function (resolve, reject) {
-            Promise.all(filePromises).then(function (duration) {
-                for (var i = 0; i < fileItems.length; i++) {
-                    if (fileString === undefined) {
-                        fileString = fileItems[i] + '*' + i + '*1*'
-                            + duration[i] + '*100*0*0*0*0*0|';
-                    }
-                    else {
-                        fileString += fileItems[i] + '*' + i + '*1*'
-                            + duration[i] + '*100*0*0*0*0*0';
-                        if (i + 1 < fileItems.length) {
-                            fileString += '|';
-                        }
-                        ;
-                    }
-                    ;
-                }
-                ;
-                item_1.Item.set('prop:item', fileItems[0] + '*0', _this._id);
-                return fileString;
-            }).then(function (fileString) {
-                item_1.Item.set('prop:FilePlaylist', fileString, _this._id)
-                    .then(function (fileplaylist) {
-                    resolve(_this);
-                });
-            });
-        });
-    };
-    ;
     return VideoPlaylistItem;
-})(item_2.Item);
+})(item_1.Item);
 exports.VideoPlaylistItem = VideoPlaylistItem;
 mixin_1.applyMixins(VideoPlaylistItem, [ilayout_1.ItemLayout, icolor_1.ItemColor, ichroma_1.ItemChroma, itransition_1.ItemTransition,
-    iconfig_1.ItemConfigurable]);
-},{"../../internal/item":42,"../../internal/util/mixin":44,"../../util/io":58,"./ichroma":14,"./icolor":15,"./iconfig":16,"./ilayout":18,"./item":21,"./itransition":22}],26:[function(require,module,exports){
+    iconfig_1.SourceConfigurable, ivideoplaylist_1.SourceVideoPlaylist, iplayback_1.SourcePlayback]);
+},{"../../internal/util/mixin":58,"../source/iconfig":33,"../source/iplayback":39,"../source/ivideoplaylist":42,"./ichroma":11,"./icolor":12,"./ilayout":14,"./item":16,"./itransition":17}],21:[function(require,module,exports){
+/// <reference path="../../defs/es6-promise.d.ts" />
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
+var eventemitter_1 = require('../util/eventemitter');
+var eventmanager_1 = require('../internal/eventmanager');
+/**
+ * The LanguageInfo class allows access to the change in language made in
+ * XSplit Broadcaster.
+ * This function is not available on Source Properties.
+ *
+ * This function can be set on both Extensions and Sources.
+ * `language-change` event is emitted.
+ *
+ * Use the `on("language-change", handler: Function)` function to listent to this event.
+ *
+ *
+ */
+var LanguageInfo = (function (_super) {
+    __extends(LanguageInfo, _super);
+    function LanguageInfo() {
+        _super.apply(this, arguments);
+    }
+    /**
+     * param: (event:string, ...params: any[])
+     *
+     * Allows this class to emit an event.
+     */
+    LanguageInfo.emit = function (event) {
+        var params = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            params[_i - 1] = arguments[_i];
+        }
+        params.unshift(event);
+        LanguageInfo._emitter.emit.apply(LanguageInfo._emitter, params);
+    };
+    /**
+     * param: (event: string, handler: Function)
+     *
+     * Allows listening to the event this class emits.
+     *
+     * #### Usage:
+     *
+     * ```javascript
+     * xjs.LanguageInfo.on('language-change', function(res) {
+     *   var lang = res
+     *   //Do other manipulation here
+     * })
+     * ```
+     *
+     */
+    LanguageInfo.on = function (event, handler) {
+        var _this = this;
+        LanguageInfo._emitter.on(event, function (lang) {
+            handler.call(_this, { lang: lang });
+        });
+    };
+    LanguageInfo._emitter = new LanguageInfo();
+    return LanguageInfo;
+})(eventemitter_1.EventEmitter);
+exports.LanguageInfo = LanguageInfo;
+eventmanager_1.EventManager.subscribe(['LanguageChanged'], function (langObj) {
+    var eventString;
+    if (langObj.hasOwnProperty('event') &&
+        langObj.hasOwnProperty('lang')) {
+        eventString = langObj['event'];
+        if (langObj['event'] === 'LanguageChanged') {
+            eventString = 'language-change';
+        }
+        LanguageInfo.emit(eventString, langObj['lang']);
+    }
+});
+},{"../internal/eventmanager":50,"../util/eventemitter":71}],22:[function(require,module,exports){
+/// <reference path="../../defs/es6-promise.d.ts" />
+var internal_1 = require('../internal/internal');
+var environment_1 = require('./environment');
+var extension_1 = require('./extension');
+var streaminfo_1 = require('./streaminfo');
+var json_1 = require('../internal/util/json');
+var item_1 = require('../internal/item');
+var remote_1 = require('../internal/remote');
+var window_1 = require('../util/window');
+var version_1 = require('../internal/util/version');
+/**
+ * The Output class provides methods to start and stop a stream/recording
+ * and pause or unpause a Local Recording.
+ *
+ * This can be used together with {@link #core/StreamInfo StreamInfo Class},
+ * where you can check the status of the outputs you start.
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var xjs = require('xjs');
+ * var streamName;
+ * xjs.Output.getOutputList()
+ * .then(function(outputs) {
+ *   outputs.map(output => {
+ *    output.getName()
+ *    .then(function(name) {
+ *      // You can also save the name on a variable to be able to use it
+ *      // when checking for the stream info.
+ *      if(name.includes('Twitch')) {
+ *        streamName = name
+ *        output.startBroadcast();
+ *      }
+ *    })
+ *  })
+ * })
+ * ```
+ *
+ * Once there's an active stream, StreamInfo class can be used at any time to
+ * check the stream status of that output.
+ *
+ * ```javascript
+ * xjs.StreamInfo.getActiveStreamChannels
+ * .then(function(channels) {
+ *   var stream = []
+ *   channels.forEach(function(channel){
+ *     channel.getName()
+ *     .then(name => {
+ *       if(name === streamName) {
+ *         stream.push(channel)
+ *       }
+ *     })
+ *   })
+ *   return stream
+ * }).then(function(stream) {
+ *   // Get any stream information you need here
+ *   return stream[0].getStreamRenderedFrames()
+ * })
+ * ```
+ */
+var Output = (function () {
+    function Output(props) {
+        this._name = props.name;
+    }
+    /**
+     * param: (id: string)
+     *
+     * ```
+     * return Promise<Output[]>
+     * ```
+     *
+     * Fetch all available Outputs you can broadcast on based on your installed
+     * Broadcast plugin.
+     *
+     * ### Basic Usage
+     *
+     * ```javascript
+     * var xjs = require('xjs');
+     *
+     * xjs.Output.getOutputList()
+     * .then(function(outputs) {
+     *   outputs.map(output => {
+     *    output.getName()
+     *    .then(function(name) {
+     *      if(name.includes('Twitch')) {
+     *        output.startBroadcast({
+     *          suppressPrestreamDialog : true
+     *        });
+     *      }
+     *    })
+     *  })
+     * })
+     * ```
+     */
+    Output.getOutputList = function () {
+        return new Promise(function (resolve, reject) {
+            var _id;
+            var _checkId;
+            if (environment_1.Environment.isExtension()) {
+                _checkId = extension_1.Extension.getInstance().getId();
+            }
+            else if (environment_1.Environment.isSourcePlugin()) {
+                _checkId = item_1.Item.get('itemlist').then(function (result) {
+                    var results = result.split(',');
+                    return results[0];
+                });
+            }
+            else {
+                _checkId = new Promise(function (innerResolve, innerReject) {
+                    innerReject(Error('Outputs class is only accessible from Source Plugins and Extensions.'));
+                });
+            }
+            _checkId.then(function (id) {
+                Output._getBroadcastChannels(id).then(function (result) {
+                    var results = json_1.JSON.parse(result);
+                    var channels = [];
+                    for (var i = 0; i < results.children.length; i++) {
+                        channels.push(new Output({
+                            name: results.children[i]['name']
+                        }));
+                    }
+                    resolve(channels);
+                });
+            }).catch(function (err) {
+                reject(err);
+            });
+        });
+    };
+    /**
+     *  return: Promise<string>
+     *
+     *  Gets the name of the Output.
+     */
+    Output.prototype.getName = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            resolve(_this._name);
+        });
+    };
+    /**
+     * param: ([options]) -- see below
+     *
+     * ```
+     * return: Promise<boolean>
+     * ```
+     *
+     * Start a broadcast of the provided channel.
+     *
+     * Accepts an optional JSON object argument,
+     * which can be used to indicate certain flags, such as (additional options may be added):
+     * - `suppressPrestreamDialog` : used to bypass the showing of the pre-stream dialog
+     *  of the outputs supporting it, will use last settings provided
+     */
+    Output.prototype.startBroadcast = function (optionBag) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (version_1.versionCompare(version_1.getVersion()).is.greaterThanOrEqualTo(version_1.handlePreStreamDialogFixVersion) &&
+                typeof optionBag !== 'undefined' && optionBag !== null &&
+                optionBag['suppressPrestreamDialog']) {
+                internal_1.exec('CallHostFunc', 'startBroadcast', _this._name, 'suppressPrestreamDialog=1');
+                resolve(true);
+            }
+            else {
+                internal_1.exec('CallHost', 'startBroadcast', _this._name);
+                resolve(true);
+            }
+        });
+    };
+    /**
+     * return: Promise<boolean>
+     *
+     * Stop a broadcast of the provided channel.
+     */
+    Output.prototype.stopBroadcast = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            internal_1.exec('CallHost', 'stopBroadcast', _this._name);
+            resolve(true);
+        });
+    };
+    /**
+     * return: Promise<boolean>
+     *
+     * Pause a local recording.
+     */
+    Output.prototype.pauseLocalRecording = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (_this._name === 'Local Recording') {
+                streaminfo_1.StreamInfo.getActiveStreamChannels().then(function (channels) {
+                    Output._localRecording = false;
+                    for (var i = 0; i < channels.length; i++) {
+                        if (channels[i]['_name'] === 'Local Recording') {
+                            Output._localRecording = true;
+                            break;
+                        }
+                    }
+                    if (Output._localRecording) {
+                        internal_1.exec('CallHost', 'pauseRecording');
+                        resolve(true);
+                    }
+                    else {
+                        reject(Error('Local recording is not active.'));
+                    }
+                });
+            }
+            else {
+                reject(Error('Output is not a local recording'));
+            }
+        });
+    };
+    /**
+     * return: Promise<boolean>
+     *
+     * Unpause a local recording.
+     */
+    Output.prototype.unpauseLocalRecording = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (_this._name === 'Local Recording') {
+                streaminfo_1.StreamInfo.getActiveStreamChannels().then(function (channels) {
+                    Output._localRecording = false;
+                    for (var i = 0; i < channels.length; i++) {
+                        if (channels[i]['_name'] === 'Local Recording') {
+                            Output._localRecording = true;
+                            break;
+                        }
+                    }
+                    if (Output._localRecording) {
+                        internal_1.exec('CallHost', 'unpauseRecording');
+                        resolve(true);
+                    }
+                    else {
+                        reject(Error('Local recording is not active.'));
+                    }
+                });
+            }
+            else {
+                reject(Error('Output is not a local recording'));
+            }
+        });
+    };
+    Output._getBroadcastChannels = function (id, handler) {
+        Output._id = id;
+        return new Promise(function (resolve, reject) {
+            if (environment_1.Environment.isSourcePlugin()) {
+                var isID = /^{[A-F0-9\-]*}$/i.test(Output._id);
+                if (!isID) {
+                    reject(Error('Not a valid ID format for items'));
+                }
+            }
+            if (remote_1.Remote.remoteType === 'remote') {
+                var message = {
+                    type: 'broadcastChannels',
+                    id: Output._id
+                };
+                extension_1.Extension._remoteCallback[Output._id] = ({ resolve: resolve });
+                remote_1.Remote.sendMessage(encodeURIComponent(JSON.stringify(message)));
+            }
+            else if (remote_1.Remote.remoteType === 'proxy') {
+                if (Output._proxyCallback[Output._id] === undefined) {
+                    Output._proxyCallback[Output._id] = [];
+                }
+                Output._proxyCallback[Output._id] = handler;
+                internal_1.exec('CallHost', 'getBroadcastChannelList:' + Output._id);
+            }
+            else {
+                if (Output._callback[Output._id] === undefined) {
+                    Output._callback[Output._id] = [];
+                }
+                Output._callback[Output._id] = ({ resolve: resolve });
+                internal_1.exec('CallHost', 'getBroadcastChannelList:' + Output._id);
+            }
+        });
+    };
+    Output._finalCallback = function (message) {
+        return new Promise(function (resolve) {
+            var result = JSON.parse(decodeURIComponent(message));
+            extension_1.Extension._remoteCallback[Output._id].resolve(result['result']);
+        });
+    };
+    Output._callback = {};
+    Output._remoteCallback = {};
+    Output._proxyCallback = {};
+    Output._localRecording = false;
+    return Output;
+})();
+exports.Output = Output;
+var oldSetBroadcastChannelList = window_1.default.SetBroadcastChannelList;
+window_1.default.SetBroadcastChannelList = function (channels) {
+    if (remote_1.Remote.remoteType === 'proxy') {
+        Output._proxyCallback[Output._id].call(this, channels);
+    }
+    else {
+        Output._callback[Output._id].resolve(channels);
+    }
+    if (typeof oldSetBroadcastChannelList === 'function') {
+        oldSetBroadcastChannelList(channels);
+    }
+};
+},{"../internal/internal":53,"../internal/item":54,"../internal/remote":55,"../internal/util/json":56,"../internal/util/version":59,"../util/window":75,"./environment":4,"./extension":5,"./streaminfo":47}],23:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var json_1 = require('../internal/util/json');
 var xml_1 = require('../internal/util/xml');
@@ -6677,6 +4913,7 @@ var app_1 = require('../internal/app');
 var internal_1 = require('../internal/internal');
 var environment_1 = require('./environment');
 var source_1 = require('./source/source');
+var isource_1 = require('./source/isource');
 var game_1 = require('./source/game');
 var camera_1 = require('./source/camera');
 var audio_1 = require('./source/audio');
@@ -6750,7 +4987,7 @@ var Scene = (function () {
      * Scene.getSceneCount().then(function(count) {
      *   sceneCount = count;
      * });
-     *
+     * ```
      */
     Scene.getSceneCount = function () {
         return new Promise(function (resolve) {
@@ -6758,26 +4995,6 @@ var Scene = (function () {
                 resolve(count);
             });
         });
-    };
-    /**
-     * return: Scene
-     *
-     * > #### For Deprecation
-     * This method is deprecated and will be removed soon.
-     * Please use {@link #core/Scene#getByIdAsync getByIdAsync} instead.
-     *
-     * Get a specific scene object given the scene number.
-     *
-     * #### Usage
-     *
-     * ```javascript
-     * var scene1 = Scene.getById(1);
-     * ```
-     */
-    Scene.getById = function (sceneNum) {
-        // initialize if necessary
-        Scene._initializeScenePool();
-        return Scene._scenePool[sceneNum - 1];
     };
     /**
      * return: Promise<Scene>
@@ -6788,27 +5005,132 @@ var Scene = (function () {
      *
      * ```javascript
      * var scene1;
-     * Scene.getByIdAsync(1).then(function(scene) {
+     * Scene.getById(1).then(function(scene) {
+     *   scene1 = scene;
+     * });
+     * ```
+     * ** For deprecation, please use getBySceneIndex instead.
+     */
+    Scene.getById = function (sceneNum) {
+        return new Promise(function (resolve, reject) {
+            Scene._initializeScenePoolAsync().then(function (cnt) {
+                if (sceneNum === 'i12') {
+                    if (Scene._scenePool[cnt]._id === 'i12') {
+                        resolve(Scene._scenePool[cnt]);
+                    }
+                    else {
+                        reject(Error('Invalid parameter. Valid range is 1 to total number of available scenes.'));
+                    }
+                }
+                else {
+                    try {
+                        if (sceneNum > cnt || typeof Scene._scenePool[sceneNum - 1] === 'undefined') {
+                            reject(Error('Invalid parameter. Valid range is 1 to total number of available scenes.'));
+                        }
+                        else {
+                            resolve(Scene._scenePool[sceneNum - 1]);
+                        }
+                    }
+                    catch (e) {
+                        reject(Error('Parameter must be a number'));
+                    }
+                }
+            });
+        });
+    };
+    /**
+     * return: Promise<Scene>
+     *
+     * Get a specific scene object given the scene index.
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * var scene1;
+     * Scene.getBySceneIndex(0).then(function(scene) {
      *   scene1 = scene;
      * });
      * ```
      */
-    Scene.getByIdAsync = function (sceneNum) {
+    Scene.getBySceneIndex = function (sceneIndex) {
         return new Promise(function (resolve, reject) {
             Scene._initializeScenePoolAsync().then(function (cnt) {
-                if (sceneNum > cnt) {
-                    reject(Error('Invalid parameter'));
+                if (sceneIndex === 'i12') {
+                    if (Scene._scenePool[cnt]._id === 'i12') {
+                        resolve(Scene._scenePool[cnt]);
+                    }
+                    else {
+                        reject(Error('Invalid parameter'));
+                    }
                 }
                 else {
-                    resolve(Scene._scenePool[sceneNum - 1]);
+                    try {
+                        if (sceneIndex > cnt || typeof Scene._scenePool[sceneIndex] === 'undefined') {
+                            reject(Error('Invalid parameter'));
+                        }
+                        else {
+                            resolve(Scene._scenePool[sceneIndex]);
+                        }
+                    }
+                    catch (e) {
+                        reject(Error('Parameter must be a number'));
+                    }
                 }
+            });
+        });
+    };
+    /**
+     * return: Promise<Scene>
+     *
+     * Get a specific scene object given the scene unique Id.
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * var scene1;
+     * Scene.getBySceneUid('{056936DD-DFAA-4148-9D08-21C8E83CE37C}')
+     * .then(function(scene) {
+     *   scene1 = scene;
+     * });
+     * ```
+     */
+    Scene.getBySceneUid = function (sceneUid) {
+        return new Promise(function (resolve, reject) {
+            var getScene = new Promise(function (sceneResolve) {
+                app_1.App.getAsList('presetconfig')
+                    .then(function (jsonArr) {
+                    var lastVal = jsonArr.length;
+                    var check = false;
+                    jsonArr.map(function (sceneJSON, idx) {
+                        if (sceneJSON['id'] === sceneUid) {
+                            sceneResolve(sceneJSON);
+                            check = true;
+                        }
+                        if (idx === lastVal - 1 && !check) {
+                            reject(Error('No matching Scene with the Unique ID provided.'));
+                        }
+                    });
+                });
+            });
+            getScene.then(function (sceneJSON) {
+                Scene.getByName(sceneJSON['name'])
+                    .then(function (scenes) {
+                    scenes.map(function (scene) {
+                        scene.getSceneUid()
+                            .then(function (uid) {
+                            if (sceneUid === uid) {
+                                resolve(scene);
+                            }
+                        });
+                    });
+                });
             });
         });
     };
     /**
      * return: Promise<Scene[]>
      *
-     * Asynchronous functon to get a list of scene objects with a specific name.
+     * Asynchronous function to get a list of scene objects with a specific name.
      *
      * #### Usage
      *
@@ -6864,10 +5186,13 @@ var Scene = (function () {
                 reject(Error('Not supported on source plugins'));
             }
             else {
-                app_1.App.get('preset:0').then(function (id) {
-                    return Scene.getByIdAsync(Number(id) + 1);
-                }).then(function (scene) {
-                    resolve(scene);
+                app_1.App.getGlobalProperty('splitmode').then(function (res) {
+                    var preset = res === '1' ? 'preset:1' : 'preset:0';
+                    app_1.App.get(preset).then(function (id) {
+                        return Scene.getById(Number(id) + 1);
+                    }).then(function (scene) {
+                        resolve(scene);
+                    });
                 });
             }
         });
@@ -6886,26 +5211,27 @@ var Scene = (function () {
                 reject(Error('Not supported on source plugins'));
             }
             else {
-                if (scene instanceof Scene) {
-                    scene.getId().then(function (id) {
-                        app_1.App.set('preset', String(id)).then(function (res) {
+                app_1.App.getGlobalProperty('splitmode').then(function (res) {
+                    var preset = res === '1' ? 'preset:1' : 'preset:0';
+                    if (scene instanceof Scene) {
+                        app_1.App.set(preset, String(scene._id)).then(function (res) {
                             resolve(res);
                         });
-                    });
-                }
-                else if (typeof scene === 'number') {
-                    if (scene < 1) {
-                        reject(Error('Invalid parameters. Valid range is greater than 0'));
+                    }
+                    else if (typeof scene === 'number') {
+                        if (scene < 1 || !Number['isInteger'](Number(scene))) {
+                            reject(Error('Invalid parameters. Valid range is greater than 0.'));
+                        }
+                        else {
+                            app_1.App.set(preset, String(scene - 1)).then(function (res) {
+                                resolve(res);
+                            });
+                        }
                     }
                     else {
-                        app_1.App.set('preset', String(scene - 1)).then(function (res) {
-                            resolve(res);
-                        });
+                        reject(Error('Invalid parameters. Valid range is greater than 0 or a Scene object.'));
                     }
-                }
-                else {
-                    reject(Error('Invalid parameters'));
-                }
+                });
             }
         });
     };
@@ -6919,7 +5245,8 @@ var Scene = (function () {
      * #### Usage
      *
      * ```javascript
-     * Scene.searchItemsById('{10F04AE-6215-3A88-7899-950B12186359}').then(function(item) {
+     * Scene.searchItemsById('{10F04AE-6215-3A88-7899-950B12186359}')
+     * .then(function(item) {
      *   // result is either an Item or null
      * });
      * ```
@@ -6935,9 +5262,10 @@ var Scene = (function () {
                 Scene._initializeScenePoolAsync().then(function (cnt) {
                     var match = null;
                     var found = false;
-                    Scene._scenePool.forEach(function (scene, idx, arr) {
+                    var promiseArray = [];
+                    var scenePromise = function (scene, idx, arr) { return new Promise(function (sceneResolve) {
                         if (match === null) {
-                            scene.getItems().then((function (items) {
+                            scene.getItems().then(function (items) {
                                 found = items.some(function (item) {
                                     if (item['_id'] === id.toUpperCase()) {
                                         match = item;
@@ -6948,14 +5276,22 @@ var Scene = (function () {
                                     }
                                 });
                                 if (found ||
-                                    Number(this) === arr.length - 1) {
-                                    resolve(match);
+                                    Number(idx) === arr.length - 1) {
+                                    sceneResolve(match);
                                 }
-                            }).bind(idx))
-                                .catch(function (err) {
-                                // Do nothing
+                                else {
+                                    sceneResolve(null);
+                                }
+                            }).catch(function (err) {
+                                sceneResolve(null);
                             });
                         }
+                    }); };
+                    Scene._scenePool.map(function (scene, idx, arr) {
+                        promiseArray.push(scenePromise(scene, idx, arr));
+                    });
+                    Promise.all(promiseArray).then(function (results) {
+                        resolve(match);
                     });
                 });
             }
@@ -6969,7 +5305,8 @@ var Scene = (function () {
      * #### Usage
      *
      * ```javascript
-     * Scene.searchScenesByItemId('{10F04AE-6215-3A88-7899-950B12186359}').then(function(scene) {
+     * Scene.searchScenesByItemId('{10F04AE-6215-3A88-7899-950B12186359}')
+     * .then(function(scene) {
      *   // scene contains the item
      * });
      * ```
@@ -6985,26 +5322,36 @@ var Scene = (function () {
                 Scene._initializeScenePoolAsync().then(function (cnt) {
                     var match = null;
                     var found = false;
-                    Scene._scenePool.forEach(function (scene, idx, arr) {
+                    var promiseArray = [];
+                    var scenePromise = function (scene, idx, arr) { return new Promise(function (sceneResolve) {
                         if (match === null) {
                             scene.getItems().then(function (items) {
                                 found = items.some(function (item) {
                                     if (item['_id'] === id.toUpperCase()) {
+                                        match = scene;
                                         return true;
                                     }
                                     else {
                                         return false;
                                     }
                                 });
-                                if (found) {
-                                    resolve(scene);
+                                if (found ||
+                                    Number(idx) === arr.length - 1) {
+                                    sceneResolve(match);
                                 }
-                                else if (idx === arr.length - 1) {
-                                    // last scene, no match
-                                    resolve(match);
+                                else {
+                                    sceneResolve(null);
                                 }
+                            }).catch(function (err) {
+                                sceneResolve(null);
                             });
                         }
+                    }); };
+                    Scene._scenePool.map(function (scene, idx, arr) {
+                        promiseArray.push(scenePromise(scene, idx, arr));
+                    });
+                    Promise.all(promiseArray).then(function (results) {
+                        resolve(match);
                     });
                 });
             }
@@ -7014,49 +5361,40 @@ var Scene = (function () {
     /**
      * return: Promise<Items[]>
      *
-     * Searches all items for a item by name substring. This function
+     * Searches all items for an item by name substring. This function
      * compares against custom name first (recommended) before falling back to the
      * name property of the item.
      *
      * #### Usage
      *
      * ```javascript
-     * Scene.searchItemsByName('camera').then(function(items) {
+     * Scene.searchItemsByName('camera')
+     * .then(function(items) {
      *   // do something to each item in items array
      * });
      * ```
+     *
+     * Note: With the XBC 2.9 change, linked items would have the same
+     * Name and Custom Name. Changes made on an item would reflect on all
+     * linked items.
      *
      */
     Scene.searchItemsByName = function (param) {
         var _this = this;
         return new Promise(function (resolve) {
             _this.filterItems(function (item, filterResolve) {
-                item.getCustomName().then(function (cname) {
-                    if (cname.match(param)) {
-                        filterResolve(true);
-                    }
-                    else {
-                        return item.getName();
-                    }
-                }).then(function (name) {
-                    if (name !== undefined) {
-                        if (name.match(param)) {
-                            filterResolve(true);
-                        }
-                        else {
-                            return item.getValue();
-                        }
-                    }
-                }).then(function (value) {
-                    if (value !== undefined) {
-                        if (value.toString().match(param)) {
-                            filterResolve(true);
-                        }
-                        else {
-                            filterResolve(false);
-                        }
-                    }
-                });
+                if (item['_cname'] === param) {
+                    filterResolve(true);
+                }
+                else if (item['_name'] === param) {
+                    filterResolve(true);
+                }
+                else if (item['_value'] === param) {
+                    filterResolve(true);
+                }
+                else {
+                    filterResolve(false);
+                }
             }).then(function (items) {
                 resolve(items);
             });
@@ -7064,7 +5402,7 @@ var Scene = (function () {
     };
     ;
     /**
-     * param: function(item, resolve)
+     * param: (func: function)
      * ```
      * return: Promise<Item[]>
      * ```
@@ -7124,7 +5462,7 @@ var Scene = (function () {
         });
     };
     /**
-     * param: function(item, resolve)
+     * param: (func: function)
      * ```
      * return: Promise<Scene[]>
      * ```
@@ -7169,7 +5507,7 @@ var Scene = (function () {
                                         resolveScene();
                                     });
                                 }
-                            });
+                            }).catch(function () { return resolveScene(); });
                         });
                     })).then(function () {
                         resolve(matches);
@@ -7184,26 +5522,24 @@ var Scene = (function () {
     /**
      * return: Promise<Source>
      *
-     * > #### For Deprecation
-     * This method is deprecated and will be removed soon.
-     * Please use {@link #core/Scene#searchItemsById searchItemsById} instead.
-     *
-     * Searches all scenes for an source by ID. ID search will return exactly 1 result (IDs are unique) or null.
+     * Searches all scenes for a source by ID. ID search will return exactly 1
+     * result (IDs are unique) or null.
      *
      * See also: {@link #core/Source Core/Source}
      *
      * #### Usage
      *
      * ```javascript
-     * Scene.searchSourcesById('{10F04AE-6215-3A88-7899-950B12186359}').then(function(source) {
-     *   // result is either a Source or null
+     * Scene.searchSourcesById('{10F04AE-6215-3A88-7899-950B12186359}')
+     * .then(function(sources) {
+     *   // result would return one instance of the source per scene
      * });
      * ```
      *
      */
-    Scene.searchSourcesById = function (id) {
+    Scene.searchSourcesById = function (srcId) {
         return new Promise(function (resolve, reject) {
-            var isID = /^{[A-F0-9\-]*}$/i.test(id);
+            var isID = /^{[A-F0-9\-]*}$/i.test(srcId);
             if (!isID) {
                 reject(Error('Not a valid ID format for sources'));
             }
@@ -7211,12 +5547,13 @@ var Scene = (function () {
                 Scene._initializeScenePoolAsync().then(function (cnt) {
                     var match = null;
                     var found = false;
-                    Scene._scenePool.forEach(function (scene, idx, arr) {
+                    var promiseArray = [];
+                    var scenePromise = function (scene, idx, arr) { return new Promise(function (sceneResolve) {
                         if (match === null) {
-                            scene.getSources().then((function (items) {
-                                found = items.some(function (item) {
-                                    if (item['_id'] === id.toUpperCase()) {
-                                        match = item;
+                            scene.getSources().then(function (sources) {
+                                found = sources.some(function (source) {
+                                    if (source['_srcId'] === srcId.toUpperCase()) {
+                                        match = source;
                                         return true;
                                     }
                                     else {
@@ -7224,14 +5561,28 @@ var Scene = (function () {
                                     }
                                 });
                                 if (found ||
-                                    Number(this) === arr.length - 1) {
-                                    resolve(match);
+                                    Number(idx) === arr.length - 1) {
+                                    sceneResolve(match);
                                 }
-                            }).bind(idx))
-                                .catch(function (err) {
-                                // Do nothing
+                                else {
+                                    sceneResolve(null);
+                                }
+                            }).catch(function (err) {
+                                sceneResolve(null);
                             });
                         }
+                    }); };
+                    Scene._scenePool.map(function (scene, idx, arr) {
+                        promiseArray.push(scenePromise(scene, idx, arr));
+                    });
+                    Promise.all(promiseArray).then(function (results) {
+                        var finalResults = [];
+                        for (var i = 0; i < results.length; i++) {
+                            if (results[i] !== null) {
+                                finalResults.push(results[i]);
+                            }
+                        }
+                        resolve(finalResults);
                     });
                 });
             }
@@ -7241,24 +5592,21 @@ var Scene = (function () {
     /**
      * return: Promise<Scene>
      *
-     * > #### For Deprecation
-     * This method is deprecated and will be removed soon.
-     * Please use {@link #core/Scene#searchScenesByItemId searchScenesByItemId} instead.
-     *
      * Searches all scenes for one that contains the given source ID.
      *
      * #### Usage
      *
      * ```javascript
-     * Scene.searchScenesBySourceId('{10F04AE-6215-3A88-7899-950B12186359}').then(function(scene) {
-     *   // scene contains the source
+     * Scene.searchScenesBySourceId('{10F04AE-6215-3A88-7899-950B12186359}')
+     * .then(function(scenes) {
+     *   // scenes that contains the source with matching source id
      * });
      * ```
      *
      */
-    Scene.searchScenesBySourceId = function (id) {
+    Scene.searchScenesBySourceId = function (srcId) {
         return new Promise(function (resolve, reject) {
-            var isID = /^{[A-F0-9-]*}$/i.test(id);
+            var isID = /^{[A-F0-9-]*}$/i.test(srcId);
             if (!isID) {
                 reject(Error('Not a valid ID format for sources'));
             }
@@ -7266,26 +5614,42 @@ var Scene = (function () {
                 Scene._initializeScenePoolAsync().then(function (cnt) {
                     var match = null;
                     var found = false;
-                    Scene._scenePool.forEach(function (scene, idx, arr) {
+                    var promiseArray = [];
+                    var scenePromise = function (scene, idx, arr) { return new Promise(function (sceneResolve) {
                         if (match === null) {
                             scene.getSources().then(function (sources) {
                                 found = sources.some(function (source) {
-                                    if (source['_id'] === id.toUpperCase()) {
+                                    if (source['_srcId'] === srcId.toUpperCase()) {
+                                        match = scene;
                                         return true;
                                     }
                                     else {
                                         return false;
                                     }
                                 });
-                                if (found) {
-                                    resolve(scene);
+                                if (found ||
+                                    Number(idx) === arr.length - 1) {
+                                    sceneResolve(match);
                                 }
-                                else if (idx === arr.length - 1) {
-                                    // last scene, no match
-                                    resolve(match);
+                                else {
+                                    sceneResolve(null);
                                 }
+                            }).catch(function (err) {
+                                sceneResolve(null);
                             });
                         }
+                    }); };
+                    Scene._scenePool.map(function (scene, idx, arr) {
+                        promiseArray.push(scenePromise(scene, idx, arr));
+                    });
+                    Promise.all(promiseArray).then(function (results) {
+                        var finalResults = [];
+                        for (var i = 0; i < results.length; i++) {
+                            if (results[i] !== null) {
+                                finalResults.push(results[i]);
+                            }
+                        }
+                        resolve(finalResults);
                     });
                 });
             }
@@ -7294,10 +5658,6 @@ var Scene = (function () {
     ;
     /**
      * return: Promise<Source[]>
-     *
-     * > #### For Deprecation
-     * This method is deprecated and will be removed soon.
-     * Please use {@link #core/Scene#searchItemsByName searchItemsByName} instead.
      *
      * Searches all scenes for a source by name substring. This function
      * compares against custom name first (recommended) before falling back to the
@@ -7350,14 +5710,10 @@ var Scene = (function () {
     };
     ;
     /**
-     * param: function(source, resolve)
+     * param: (func: function)
      * ```
      * return: Promise<Source[]>
      * ```
-     *
-     * > #### For Deprecation
-     * This method is deprecated and will be removed soon.
-     * Please use {@link #core/Scene#filterItems filterItems} instead.
      *
      * Searches all scenes for sources that satisfies the provided testing function.
      *
@@ -7365,12 +5721,12 @@ var Scene = (function () {
      *
      * ```javascript
      * Scene.filterSources(function(source, resolve) {
-     *   // We'll only fetch Flash Sources by resolving 'true' if the source is an
-     *   // instance of FlashSource
+     *   // We'll only fetch Flash Sources by resolving 'true' if the source is
+     *   // an instance of FlashSource
      *   resolve((source instanceof FlashSource));
      * }).then(function(sources) {
-     *   // sources would either be an empty array if no Flash sources was found,
-     *   // or an array of FlashSource objects
+     *   // sources would either be an empty array if no Flash sources was
+     *   // found, or an array of FlashSource objects
      * });
      * ```
      */
@@ -7414,14 +5770,10 @@ var Scene = (function () {
         });
     };
     /**
-     * param: function(source, resolve)
+     * param: (func: function)
      * ```
      * return: Promise<Scene[]>
      * ```
-     *
-     * > #### For Deprecation
-     * This method is deprecated and will be removed soon.
-     * Please use {@link #core/Scene#filterScenesByItems filterScenesByItems} instead.
      *
      * Searches all scenes for sources that satisfies the provided testing
      * function, and then return the scene that contains the source.
@@ -7430,8 +5782,8 @@ var Scene = (function () {
      *
      * ```javascript
      * Scene.filterScenesBySources(function(source, resolve) {
-     *   // We'll only fetch the scenes with flash sources by resolving 'true' if
-     *   // the source is an instance of FlashSource
+     *   // We'll only fetch the scenes with flash sources by resolving 'true'
+     *   // if the source is an instance of FlashSource
      *   resolve((source instanceof FlashSource));
      * }).then(function(scenes) {
      *   // scenes would be an array of all scenes with FlashSources
@@ -7480,7 +5832,8 @@ var Scene = (function () {
   
      * Load scenes that are not yet initialized in XSplit Broadcaster.
      *
-     * Note: For memory saving purposes, this is not called automatically.
+     * Note: This is only necessary for XSplit version 2.7 and below.
+     * Also, for memory saving purposes, this is not called automatically.
      * If your extension wants to manipulate multiple scenes, it is imperative that you call this function.
      * This function is only available to extensions.
      *
@@ -7522,6 +5875,102 @@ var Scene = (function () {
         });
     };
     /**
+     * return: Promise<Source[]>
+     *
+     * Get all unique Sources from the current scene.
+     * Total number of Sources returned may be less that total number of Items on
+     * the scenes due to `Linked` items only having a single Source.
+     * See also: {@link #core/Source Core/Source}
+     *
+     * #### Usage
+     * ```javascript
+     * scene.getSources().then(function(sources) {
+     *   for(var i = 0 ; i < sources.length ; i++) {
+     *      if(sources[i] instanceof xjs.HtmlSource) {
+     *        // Manipulate HTML Source here
+     *      }
+     *   }
+     * })
+     * ```
+     */
+    Scene.prototype.getSources = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            app_1.App.getAsList('presetconfig:' + _this._id).then(function (jsonArr) {
+                var promiseArray = [];
+                var uniqueObj = {};
+                var uniqueSrc = [];
+                // type checking to return correct Source subtype
+                var typePromise = function (index) { return new Promise(function (typeResolve) {
+                    var source = jsonArr[index];
+                    var type = Number(source['type']);
+                    if (type === isource_1.ItemTypes.GAMESOURCE) {
+                        typeResolve(new game_1.GameSource(source));
+                    }
+                    else if ((type === isource_1.ItemTypes.HTML || type === isource_1.ItemTypes.FILE) &&
+                        source['name'].indexOf('Video Playlist') === 0 &&
+                        source['FilePlaylist'] !== '') {
+                        typeResolve(new videoplaylist_1.VideoPlaylistSource(source));
+                    }
+                    else if (type === isource_1.ItemTypes.HTML) {
+                        typeResolve(new html_1.HtmlSource(source));
+                    }
+                    else if (type === isource_1.ItemTypes.SCREEN) {
+                        typeResolve(new screen_1.ScreenSource(source));
+                    }
+                    else if (type === isource_1.ItemTypes.BITMAP ||
+                        type === isource_1.ItemTypes.FILE &&
+                            /\.gif$/.test(source['item'])) {
+                        typeResolve(new image_1.ImageSource(source));
+                    }
+                    else if (type === isource_1.ItemTypes.FILE &&
+                        /\.(gif|xbs)$/.test(source['item']) === false &&
+                        /^(rtsp|rtmp):\/\//.test(source['item']) === false &&
+                        new RegExp(media_1.MediaTypes.join('|')).test(source['item']) === true) {
+                        typeResolve(new media_1.MediaSource(source));
+                    }
+                    else if (Number(source['type']) === isource_1.ItemTypes.LIVE &&
+                        source['item'].indexOf('{33D9A762-90C8-11D0-BD43-00A0C911CE86}') === -1) {
+                        typeResolve(new camera_1.CameraSource(source));
+                    }
+                    else if (Number(source['type']) === isource_1.ItemTypes.LIVE &&
+                        source['item'].indexOf('{33D9A762-90C8-11D0-BD43-00A0C911CE86}') !== -1) {
+                        typeResolve(new audio_1.AudioSource(source));
+                    }
+                    else if (Number(source['type']) === isource_1.ItemTypes.FLASHFILE) {
+                        typeResolve(new flash_1.FlashSource(source));
+                    }
+                    else {
+                        typeResolve(new source_1.Source(source));
+                    }
+                }); };
+                if (Array.isArray(jsonArr)) {
+                    for (var i = 0; i < jsonArr.length; i++) {
+                        jsonArr[i]['sceneId'] = _this._id;
+                        promiseArray.push(typePromise(i));
+                    }
+                }
+                Promise.all(promiseArray).then(function (results) {
+                    for (var h = 0; h < results.length; h++) {
+                        for (var key in results[h]) {
+                            if (key === '_srcId') {
+                                uniqueObj[results[h][key]] = results[h];
+                            }
+                        }
+                    }
+                    for (var j in uniqueObj) {
+                        if (uniqueObj.hasOwnProperty(j)) {
+                            uniqueSrc.push(uniqueObj[j]);
+                        }
+                    }
+                    resolve(uniqueSrc);
+                });
+            }).catch(function (err) {
+                reject(err);
+            });
+        });
+    };
+    /**
      * return: number
      *
      * Get the 1-indexed scene number of this scene object.
@@ -7534,6 +5983,8 @@ var Scene = (function () {
      *  console.log('My scene is scene number ' + num);
      * });
      * ```
+     *
+     * ** For deprecation, please use getSceneIndex instead.
      */
     Scene.prototype.getSceneNumber = function () {
         var _this = this;
@@ -7549,13 +6000,66 @@ var Scene = (function () {
     /**
      * return: number
      *
+     * Get the 0-indexed scene number of this scene object.
+     *
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * myScene.getSceneIndex().then(function(num) {
+     *  console.log('Scene index is ' + num);
+     * });
+     * ```
+     */
+    Scene.prototype.getSceneIndex = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (typeof _this._id !== 'number') {
+                resolve(Number(_this._id));
+            }
+            else {
+                resolve(_this._id);
+            }
+        });
+    };
+    /**
+     * return: string
+     *
+     * Get the unique id of this scene object.
+     *
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * myScene.getSceneUid().then(function(res) {
+     *  console.log('Scene unique id is  ' + res);
+     * });
+     * ```
+     */
+    Scene.prototype.getSceneUid = function () {
+        var sceneName;
+        this.getName().then(function (name) { return sceneName = name; });
+        return new Promise(function (resolve) {
+            app_1.App.getAsList('presetconfig')
+                .then(function (jsonArr) {
+                jsonArr.map(function (scene) {
+                    if (scene['name'] === sceneName) {
+                        resolve(scene['id']);
+                    }
+                });
+            });
+        });
+    };
+    /**
+     * return: number
+     *
      * Get the name of this scene object.
      *
      *
      * #### Usage
      *
      * ```javascript
-     * myScene.getSceneName().then(function(name) {
+     * myScene.getName().then(function(name) {
      *  console.log('My scene is named ' + name);
      * });
      * ```
@@ -7569,7 +6073,7 @@ var Scene = (function () {
         });
     };
     /**
-     *
+     * param: (value: string)
      * Set the name of this scene object. Cannot be set by source plugins.
      *
      * #### Usage
@@ -7592,98 +6096,16 @@ var Scene = (function () {
         });
     };
     /**
-     * return: Promise<Source[]>
-     *
-     * > #### For Deprecation
-     * This method is deprecated and will be removed soon.
-     * Please use {@link #core/Scene#getItems getItems} instead.
-     *
-     * Gets all the sources in a specific scene.
-     * See also: {@link #core/Source Core/Source}
-     *
-     * #### Usage
-     *
-     * ```javascript
-     * myScene.getSources().then(function(sources) {
-     *  // do something to each source in sources array
-     * });
-     * ```
-     */
-    Scene.prototype.getSources = function () {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            console.warn('Warning! getSources is deprecated and will be ' +
-                'removed soon. Please use getItems instead.');
-            app_1.App.getAsList('presetconfig:' + _this._id).then(function (jsonArr) {
-                var promiseArray = [];
-                // type checking to return correct Source subtype
-                var typePromise = function (index) { return new Promise(function (typeResolve) {
-                    var source = jsonArr[index];
-                    var type = Number(source['type']);
-                    if (type === item_1.ItemTypes.GAMESOURCE) {
-                        typeResolve(new game_1.GameSource(source));
-                    }
-                    else if ((type === item_1.ItemTypes.HTML || type === item_1.ItemTypes.FILE) &&
-                        source['name'].indexOf('Video Playlist') === 0 &&
-                        source['FilePlaylist'] !== '') {
-                        typeResolve(new videoplaylist_1.VideoPlaylistSource(source));
-                    }
-                    else if (type === item_1.ItemTypes.HTML) {
-                        typeResolve(new html_1.HtmlSource(source));
-                    }
-                    else if (type === item_1.ItemTypes.SCREEN) {
-                        typeResolve(new screen_1.ScreenSource(source));
-                    }
-                    else if (type === item_1.ItemTypes.BITMAP ||
-                        type === item_1.ItemTypes.FILE &&
-                            /\.gif$/.test(source['item'])) {
-                        typeResolve(new image_1.ImageSource(source));
-                    }
-                    else if (type === item_1.ItemTypes.FILE &&
-                        /\.(gif|xbs)$/.test(source['item']) === false &&
-                        /^(rtsp|rtmp):\/\//.test(source['item']) === false) {
-                        typeResolve(new media_1.MediaSource(source));
-                    }
-                    else if (Number(source['type']) === item_1.ItemTypes.LIVE &&
-                        source['item'].indexOf('{33D9A762-90C8-11D0-BD43-00A0C911CE86}') === -1) {
-                        typeResolve(new camera_1.CameraSource(source));
-                    }
-                    else if (Number(source['type']) === item_1.ItemTypes.LIVE &&
-                        source['item'].indexOf('{33D9A762-90C8-11D0-BD43-00A0C911CE86}') !== -1) {
-                        typeResolve(new audio_1.AudioSource(source));
-                    }
-                    else if (Number(source['type']) === item_1.ItemTypes.FLASHFILE) {
-                        typeResolve(new flash_1.FlashSource(source));
-                    }
-                    else {
-                        typeResolve(new source_1.Source(source));
-                    }
-                }); };
-                if (Array.isArray(jsonArr)) {
-                    for (var i = 0; i < jsonArr.length; i++) {
-                        jsonArr[i]['sceneId'] = _this._id;
-                        promiseArray.push(typePromise(i));
-                    }
-                }
-                Promise.all(promiseArray).then(function (results) {
-                    resolve(results);
-                });
-            }).catch(function (err) {
-                reject(err);
-            });
-        });
-    };
-    /**
      * return: Promise<Item[]>
      *
-     * Gets all the sources in a specific scene.
-     * See also: {@link #core/Source Core/Source}
+     * Gets all the items in a specific scene.
+     * See also: {@link #core/Item Core/Item}
      *
      * #### Usage
      *
      * ```javascript
      * myScene.getItems().then(function(items) {
-     *  // do something to each source in items array
+     *  // do something to each item in items array
      * });
      * ```
      */
@@ -7696,39 +6118,40 @@ var Scene = (function () {
                 var typePromise = function (index) { return new Promise(function (typeResolve) {
                     var item = jsonArr[index];
                     var type = Number(item['type']);
-                    if (type === item_1.ItemTypes.GAMESOURCE) {
+                    if (type === isource_1.ItemTypes.GAMESOURCE) {
                         typeResolve(new game_2.GameItem(item));
                     }
-                    else if ((type === item_1.ItemTypes.HTML || type === item_1.ItemTypes.FILE) &&
+                    else if ((type === isource_1.ItemTypes.HTML || type === isource_1.ItemTypes.FILE) &&
                         item['name'].indexOf('Video Playlist') === 0 &&
                         item['FilePlaylist'] !== '') {
                         typeResolve(new videoplaylist_2.VideoPlaylistItem(item));
                     }
-                    else if (type === item_1.ItemTypes.HTML) {
+                    else if (type === isource_1.ItemTypes.HTML) {
                         typeResolve(new html_2.HtmlItem(item));
                     }
-                    else if (type === item_1.ItemTypes.SCREEN) {
+                    else if (type === isource_1.ItemTypes.SCREEN) {
                         typeResolve(new screen_2.ScreenItem(item));
                     }
-                    else if (type === item_1.ItemTypes.BITMAP ||
-                        type === item_1.ItemTypes.FILE &&
+                    else if (type === isource_1.ItemTypes.BITMAP ||
+                        type === isource_1.ItemTypes.FILE &&
                             /\.gif$/.test(item['item'])) {
                         typeResolve(new image_2.ImageItem(item));
                     }
-                    else if (type === item_1.ItemTypes.FILE &&
+                    else if (type === isource_1.ItemTypes.FILE &&
                         /\.(gif|xbs)$/.test(item['item']) === false &&
-                        /^(rtsp|rtmp):\/\//.test(item['item']) === false) {
+                        /^(rtsp|rtmp):\/\//.test(item['item']) === false &&
+                        new RegExp(media_1.MediaTypes.join('|')).test(item['item']) === true) {
                         typeResolve(new media_2.MediaItem(item));
                     }
-                    else if (Number(item['type']) === item_1.ItemTypes.LIVE &&
+                    else if (Number(item['type']) === isource_1.ItemTypes.LIVE &&
                         item['item'].indexOf('{33D9A762-90C8-11D0-BD43-00A0C911CE86}') === -1) {
                         typeResolve(new camera_2.CameraItem(item));
                     }
-                    else if (Number(item['type']) === item_1.ItemTypes.LIVE &&
+                    else if (Number(item['type']) === isource_1.ItemTypes.LIVE &&
                         item['item'].indexOf('{33D9A762-90C8-11D0-BD43-00A0C911CE86}') !== -1) {
                         typeResolve(new audio_2.AudioItem(item));
                     }
-                    else if (Number(item['type']) === item_1.ItemTypes.FLASHFILE) {
+                    else if (Number(item['type']) === isource_1.ItemTypes.FLASHFILE) {
                         typeResolve(new flash_2.FlashItem(item));
                     }
                     else {
@@ -7750,6 +6173,8 @@ var Scene = (function () {
         });
     };
     /**
+     * return: Promise<boolean>
+     *
      * Checks if a scene is empty.
      *
      * #### Usage
@@ -7771,117 +6196,31 @@ var Scene = (function () {
         });
     };
     /**
-     * param: Array<Source> | Array<string> (source IDs)
-     * ```
-     * return: Promise<Scene>
-     * ```
-     *
-     * > #### For Deprecation
-     * This method is deprecated and will be removed soon.
-     * Please use {@link #core/Scene#setItemOrder setItemOrder} instead.
-     *
-     * Sets the source order of the current scene. The first source in the array
-     * will be on top (will cover sources below it).
-     */
-    Scene.prototype.setSourceOrder = function (sources) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            if (environment_1.Environment.isSourcePlugin()) {
-                reject(Error('not available for source plugins'));
-            }
-            else {
-                sources.reverse();
-                var ids = [];
-                Scene.getActiveScene().then(function (scene) {
-                    if (sources.every(function (el) { return (el instanceof source_1.Source || el instanceof item_1.Item); })) {
-                        return new Promise(function (resolve) {
-                            var promises = [];
-                            for (var i in sources) {
-                                promises.push((function (_i) {
-                                    return new Promise(function (resolve) {
-                                        sources[_i].getId().then(function (id) {
-                                            ids[_i] = id;
-                                            resolve(_this);
-                                        });
-                                    });
-                                })(i));
-                            }
-                            Promise.all(promises).then(function () {
-                                return scene.getSceneNumber();
-                            }).then(function (id) {
-                                resolve(id);
-                            });
-                        });
-                    }
-                    else {
-                        ids = sources;
-                        return scene.getSceneNumber();
-                    }
-                }).then(function (id) {
-                    if ((Number(id) - 1) === _this._id && environment_1.Environment.isSourceConfig()) {
-                        internal_1.exec('SourcesListOrderSave', ids.join(','));
-                        resolve(_this);
-                    }
-                    else {
-                        var sceneName;
-                        _this.getName().then(function (name) {
-                            sceneName = name;
-                            return app_1.App.getAsList('presetconfig:' + _this._id);
-                        }).then(function (jsonArr) {
-                            var newOrder = new json_1.JSON();
-                            newOrder.children = [];
-                            newOrder['tag'] = 'placement';
-                            newOrder['name'] = sceneName;
-                            if (Array.isArray(jsonArr)) {
-                                var attrs = ['name', 'cname', 'item'];
-                                for (var i = 0; i < jsonArr.length; i++) {
-                                    for (var a = 0; a < attrs.length; a++) {
-                                        jsonArr[i][attrs[a]] = jsonArr[i][attrs[a]]
-                                            .replace(/([^\\])(\\)([^\\])/g, '$1\\\\$3');
-                                        jsonArr[i][attrs[a]] = jsonArr[i][attrs[a]]
-                                            .replace(/"/g, '&quot;');
-                                    }
-                                    newOrder.children[ids.indexOf(jsonArr[i]['id'])] = jsonArr[i];
-                                }
-                                app_1.App.set('presetconfig:' + _this._id, xml_1.XML.parseJSON(newOrder).toString()).then(function () {
-                                    resolve(_this);
-                                });
-                            }
-                            else {
-                                reject(Error('Scene does not have any source'));
-                            }
-                        });
-                    }
-                });
-            }
-        });
-    };
-    /**
-   * param: Array<Source> | Array<string> (source IDs)
+   * param: Array<Item> | Array<string> (item IDs)
    * ```
    * return: Promise<Scene>
    * ```
    *
    * Sets the item order of the current scene. The first item in the array
-   * will be on top (will cover sources below it).
+   * will be on top (will cover items below it).
    */
-    Scene.prototype.setItemOrder = function (sources) {
+    Scene.prototype.setItemOrder = function (items) {
         var _this = this;
         return new Promise(function (resolve, reject) {
             if (environment_1.Environment.isSourcePlugin()) {
                 reject(Error('not available for source plugins'));
             }
             else {
-                sources.reverse();
+                items.reverse();
                 var ids = [];
                 Scene.getActiveScene().then(function (scene) {
-                    if (sources.every(function (el) { return el instanceof source_1.Source; })) {
+                    if (items.every(function (el) { return (el instanceof source_1.Source || el instanceof item_1.Item); })) {
                         return new Promise(function (resolve) {
                             var promises = [];
-                            for (var i in sources) {
+                            for (var i in items) {
                                 promises.push((function (_i) {
                                     return new Promise(function (resolve) {
-                                        sources[_i].getId().then(function (id) {
+                                        items[_i].getId().then(function (id) {
                                             ids[_i] = id;
                                             resolve(_this);
                                         });
@@ -7896,12 +6235,13 @@ var Scene = (function () {
                         });
                     }
                     else {
-                        ids = sources;
+                        ids = items;
                         return scene.getSceneNumber();
                     }
                 }).then(function (id) {
-                    if ((Number(id) - 1) === _this._id && environment_1.Environment.isSourceConfig()) {
-                        internal_1.exec('SourcesListOrderSave', ids.join(','));
+                    if ((Number(id) - 1) === _this._id &&
+                        (environment_1.Environment.isSourceProps() || (environment_1.Environment.isExtension))) {
+                        internal_1.exec('SourcesListOrderSave', String(item_1.ViewTypes.MAIN), ids.join(','));
                         resolve(_this);
                     }
                     else {
@@ -7918,14 +6258,17 @@ var Scene = (function () {
                                 var attrs = ['name', 'cname', 'item'];
                                 for (var i = 0; i < jsonArr.length; i++) {
                                     for (var a = 0; a < attrs.length; a++) {
+                                        //This formatting is for json
                                         jsonArr[i][attrs[a]] = jsonArr[i][attrs[a]]
-                                            .replace(/([^\\])(\\)([^\\])/g, '$1\\\\$3');
+                                            .replace(/\\/g, '\\\\');
                                         jsonArr[i][attrs[a]] = jsonArr[i][attrs[a]]
                                             .replace(/"/g, '&quot;');
                                     }
                                     newOrder.children[ids.indexOf(jsonArr[i]['id'])] = jsonArr[i];
                                 }
-                                app_1.App.set('presetconfig:' + _this._id, xml_1.XML.parseJSON(newOrder).toString()).then(function () {
+                                app_1.App.set('presetconfig:' + _this._id, 
+                                //Revert back the formatting from json when transforming to xml
+                                xml_1.XML.parseJSON(newOrder).toString().replace(/\\\\/g, '\\')).then(function () {
                                     resolve(_this);
                                 });
                             }
@@ -7943,7 +6286,7 @@ var Scene = (function () {
     return Scene;
 })();
 exports.Scene = Scene;
-},{"../internal/app":38,"../internal/internal":41,"../internal/util/json":43,"../internal/util/version":45,"../internal/util/xml":46,"./environment":5,"./items/audio":7,"./items/camera":8,"./items/flash":10,"./items/game":11,"./items/html":12,"./items/image":19,"./items/item":21,"./items/media":23,"./items/screen":24,"./items/videoplaylist":25,"./source/audio":27,"./source/camera":28,"./source/flash":29,"./source/game":30,"./source/html":31,"./source/image":32,"./source/media":33,"./source/screen":34,"./source/source":35,"./source/videoplaylist":36}],27:[function(require,module,exports){
+},{"../internal/app":49,"../internal/internal":53,"../internal/util/json":56,"../internal/util/version":59,"../internal/util/xml":60,"./environment":4,"./items/audio":6,"./items/camera":7,"./items/flash":8,"./items/game":9,"./items/html":10,"./items/image":15,"./items/item":16,"./items/media":18,"./items/screen":19,"./items/videoplaylist":20,"./source/audio":24,"./source/camera":25,"./source/flash":27,"./source/game":28,"./source/html":29,"./source/image":37,"./source/isource":41,"./source/media":43,"./source/screen":44,"./source/source":45,"./source/videoplaylist":46}],24:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -7951,12 +6294,39 @@ var __extends = (this && this.__extends) || function (d, b) {
     __.prototype = b.prototype;
     d.prototype = new __();
 };
-var audio_1 = require('../items/audio');
+var mixin_1 = require('../../internal/util/mixin');
+var source_1 = require('../source/source');
+var iaudio_1 = require('../source/iaudio');
+var iaudiosource_1 = require('../source/iaudiosource');
 /**
- * > #### For Deprecation
- * This Class is deprecated and will be removed soon. Please use
- * {@link #core/AudioItem AudioItem} instead. This Class shares the same methods
- * with AudioItem.
+ * The AudioSource class represents the sources of the audio device items that
+ * has been added to the stage. A single source could have multiple items linked
+ * into it and any changes to the source would affect all items linked to it.
+ *
+ * Each item is represented by the AudioItem class.
+ * See: {@link #core/AudioItem Core/AudioItem}
+ *
+ * Inherits from: {@link #core/Source Core/Source}
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var xjs = require('xjs');
+ *
+ * xjs.Scene.getActiveScene().then(function(scene) {
+ *   scene.getSources().then(function(sources) {
+ *   for (var i in sources) {
+ *       if (sources[i] instanceof XJS.AudioSource) {
+ *         // Manipulate your audio device source here
+ *         sources[i].setSilenceDetectionEnabled(true);
+ *       }
+ *     }
+ *   })
+ * })
+ * ```
+ *
+ * All methods marked as *Chainable* resolve with the original `AudioSource`
+ * instance.
  */
 var AudioSource = (function (_super) {
     __extends(AudioSource, _super);
@@ -7964,9 +6334,10 @@ var AudioSource = (function (_super) {
         _super.apply(this, arguments);
     }
     return AudioSource;
-})(audio_1.AudioItem);
+})(source_1.Source);
 exports.AudioSource = AudioSource;
-},{"../items/audio":7}],28:[function(require,module,exports){
+mixin_1.applyMixins(AudioSource, [iaudiosource_1.SourceAudio, iaudio_1.Audio]);
+},{"../../internal/util/mixin":58,"../source/iaudio":30,"../source/iaudiosource":31,"../source/source":45}],25:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -7974,12 +6345,39 @@ var __extends = (this && this.__extends) || function (d, b) {
     __.prototype = b.prototype;
     d.prototype = new __();
 };
-var camera_1 = require('../items/camera');
+var mixin_1 = require('../../internal/util/mixin');
+var source_1 = require('../source/source');
+var iaudio_1 = require('../source/iaudio');
+var icamera_1 = require('../source/icamera');
 /**
- * > #### For Deprecation
- * This Class is deprecated and will be removed soon. Please use
- * {@link #core/CameraItem CameraItem} instead. This Class shares the same
- * methods with CameraItem.
+ * The CameraSource class represents the sources of the camera device items that
+ * has been added to the stage. A single source could have multiple items linked
+ * into it and any changes to the source would affect all items linked to it.
+ *
+ * Each item is represented by the CameraItem class.
+ * See: {@link #core/CameraItem Core/CameraItem}
+ *
+ * Inherits from: {@link #core/Source Core/Source}
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var xjs = require('xjs');
+ *
+ * xjs.Scene.getActiveScene().then(function(scene) {
+ *   scene.getSources().then(function(sources) {
+ *   for (var i in sources) {
+ *       if (sources[i] instanceof XJS.CameraSource) {
+ *         // Manipulate your camera device source here
+ *         sources[i].setSilenceDetectionEnabled(true);
+ *       }
+ *     }
+ *   })
+ * })
+ * ```
+ *
+ * All methods marked as *Chainable* resolve with the original `CameraSource`
+ * instance.
  */
 var CameraSource = (function (_super) {
     __extends(CameraSource, _super);
@@ -7987,9 +6385,76 @@ var CameraSource = (function (_super) {
         _super.apply(this, arguments);
     }
     return CameraSource;
-})(camera_1.CameraItem);
+})(source_1.Source);
 exports.CameraSource = CameraSource;
-},{"../items/camera":8}],29:[function(require,module,exports){
+mixin_1.applyMixins(CameraSource, [iaudio_1.Audio, icamera_1.SourceCamera]);
+},{"../../internal/util/mixin":58,"../source/iaudio":30,"../source/icamera":32,"../source/source":45}],26:[function(require,module,exports){
+/**
+ *  A CuePoint represents a configurable object for sources that
+ *  support cue points. Check `getCuePoints()` and other related methods of
+ *  {@link #core/ISourcePlayback#getCuePoints getCuePoints}.
+ */
+var CuePoint = (function () {
+    function CuePoint(time, action) {
+        this._time = time;
+        this._action = action;
+    }
+    CuePoint.prototype.toString = function () {
+        return String(this._time * 10000000) + this._action;
+    };
+    /**
+     * param: number
+     *
+     * Sets this cue point's time in seconds, with precision up to 100ns.
+     */
+    CuePoint.prototype.setTime = function (time) {
+        this._time = time;
+    };
+    /**
+     *  param: string
+     *
+     *  Sets the action to be performed on the cue point. Choose any of the
+     *  following values: CuePoint.PAUSE, CuePoint.RESUME, CuePoint.CUT.
+     */
+    CuePoint.prototype.setAction = function (action) {
+        if (action === CuePoint.PAUSE || action === CuePoint.RESUME ||
+            action === CuePoint.CUT) {
+            this._action = action;
+        }
+        else {
+            throw new Error('Trying to set to an invalid Cue Point action.');
+        }
+    };
+    /**
+     * return: number
+     *
+     * Gets the time in seconds corresponding to this cue point, with precision
+     * up to 100ns.
+     */
+    CuePoint.prototype.getTime = function () {
+        return this._time / 10000000;
+    };
+    /**
+     *  return: string
+     *
+     *  Gets the action to be performed on the cue point, which may be any of the
+     *  following: CuePoint.PAUSE, CuePoint.RESUME, CuePoint.CUT.
+     */
+    CuePoint.prototype.getAction = function () {
+        return this._action;
+    };
+    CuePoint._fromString = function (value) {
+        var _a = [value.substring(0, value.length - 1),
+            value.charAt(value.length - 1)], time = _a[0], action = _a[1];
+        return new CuePoint(Number(time), action);
+    };
+    CuePoint.PAUSE = 'p';
+    CuePoint.RESUME = 'r';
+    CuePoint.CUT = 's';
+    return CuePoint;
+})();
+exports.CuePoint = CuePoint;
+},{}],27:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -7997,12 +6462,39 @@ var __extends = (this && this.__extends) || function (d, b) {
     __.prototype = b.prototype;
     d.prototype = new __();
 };
-var flash_1 = require('../items/flash');
+var mixin_1 = require('../../internal/util/mixin');
+var source_1 = require('../source/source');
+var iaudio_1 = require('../source/iaudio');
+var iflash_1 = require('./iflash');
 /**
- * > #### For Deprecation
- * This Class is deprecated and will be removed soon. Please use
- * {@link #core/FlashItem FlashItem} instead. This Class shares the same
- * methods with FlashItem.
+ * The FlashSource class represents the sources of the flash items that
+ * has been added to the stage. A single source could have multiple items linked
+ * into it and any changes to the source would affect all items linked to it.
+ *
+ * Each item is represented by the FlashItem class.
+ * See: {@link #core/FlashItem Core/FlashItem}
+ *
+ * Inherits from: {@link #core/Source Core/Source}
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var xjs = require('xjs');
+ *
+ * xjs.Scene.getActiveScene().then(function(scene) {
+ *   scene.getSources().then(function(sources) {
+ *   for (var i in sources) {
+ *       if (sources[i] instanceof XJS.FlashSource) {
+ *         // Manipulate your game source here
+ *         sources[i].setSilenceDetectionEnabled(true);
+ *       }
+ *     }
+ *   })
+ * })
+ * ```
+ *
+ * All methods marked as *Chainable* resolve with the original `FlashSource`
+ * instance.
  */
 var FlashSource = (function (_super) {
     __extends(FlashSource, _super);
@@ -8010,9 +6502,10 @@ var FlashSource = (function (_super) {
         _super.apply(this, arguments);
     }
     return FlashSource;
-})(flash_1.FlashItem);
+})(source_1.Source);
 exports.FlashSource = FlashSource;
-},{"../items/flash":10}],30:[function(require,module,exports){
+mixin_1.applyMixins(FlashSource, [iaudio_1.Audio, iflash_1.SourceFlash]);
+},{"../../internal/util/mixin":58,"../source/iaudio":30,"../source/source":45,"./iflash":34}],28:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -8020,12 +6513,38 @@ var __extends = (this && this.__extends) || function (d, b) {
     __.prototype = b.prototype;
     d.prototype = new __();
 };
-var game_1 = require('../items/game');
+var mixin_1 = require('../../internal/util/mixin');
+var source_1 = require('../source/source');
+var igame_1 = require('./igame');
 /**
- * > #### For Deprecation
- * This Class is deprecated and will be removed soon. Please use
- * {@link #core/GameItem GameItem} instead. This Class shares the same methods
- * with GameItem.
+ * The GameSource class represents the sources of the game items that
+ * has been added to the stage. A single source could have multiple items linked
+ * into it and any changes to the source would affect all items linked to it.
+ *
+ * Each item is represented by the GameItem class.
+ * See: {@link #core/GameItem Core/GameItem}
+ *
+ * Inherits from: {@link #core/Source Core/Source}
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var xjs = require('xjs');
+ *
+ * xjs.Scene.getActiveScene().then(function(scene) {
+ *   scene.getSources().then(function(sources) {
+ *   for (var i in sources) {
+ *       if (sources[i] instanceof XJS.GameSource) {
+ *         // Manipulate your audio device source here
+ *         sources[i].setSilenceDetectionEnabled(true);
+ *       }
+ *     }
+ *   })
+ * })
+ * ```
+ *
+ * All methods marked as *Chainable* resolve with the original `GameSource`
+ * instance.
  */
 var GameSource = (function (_super) {
     __extends(GameSource, _super);
@@ -8033,9 +6552,10 @@ var GameSource = (function (_super) {
         _super.apply(this, arguments);
     }
     return GameSource;
-})(game_1.GameItem);
+})(source_1.Source);
 exports.GameSource = GameSource;
-},{"../items/game":11}],31:[function(require,module,exports){
+mixin_1.applyMixins(GameSource, [igame_1.iSourceGame]);
+},{"../../internal/util/mixin":58,"../source/source":45,"./igame":35}],29:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -8043,12 +6563,40 @@ var __extends = (this && this.__extends) || function (d, b) {
     __.prototype = b.prototype;
     d.prototype = new __();
 };
-var html_1 = require('../items/html');
+var mixin_1 = require('../../internal/util/mixin');
+var source_1 = require('../source/source');
+var iconfig_1 = require('./iconfig');
+var iaudio_1 = require('../source/iaudio');
+var ihtml_1 = require('../source/ihtml');
 /**
- * > #### For Deprecation
- * This Class is deprecated and will be removed soon. Please use
- * {@link #core/HtmlItem HtmlItem} instead. This Class shares the same
- * methods with HtmlItem.
+ * The HtmlSource class represents the sources of the html items that
+ * has been added to the stage. A single source could have multiple items linked
+ * into it and any changes to the source would affect all items linked to it.
+ *
+ * Each item is represented by the HtmlItem class.
+ * See: {@link #core/HtmlItem Core/HtmlItem}
+ *
+ * Inherits from: {@link #core/Source Core/Source}
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var xjs = require('xjs');
+ *
+ * xjs.Scene.getActiveScene().then(function(scene) {
+ *   scene.getSources().then(function(sources) {
+ *   for (var i in sources) {
+ *       if (sources[i] instanceof XJS.HtmlSource) {
+ *         // Manipulate your html source here
+ *         sources[i].setSilenceDetectionEnabled(true);
+ *       }
+ *     }
+ *   })
+ * })
+ * ```
+ *
+ * All methods marked as *Chainable* resolve with the original `HtmlSource`
+ * instance.
  */
 var HtmlSource = (function (_super) {
     __extends(HtmlSource, _super);
@@ -8056,21 +6604,1697 @@ var HtmlSource = (function (_super) {
         _super.apply(this, arguments);
     }
     return HtmlSource;
-})(html_1.HtmlItem);
+})(source_1.Source);
 exports.HtmlSource = HtmlSource;
-},{"../items/html":12}],32:[function(require,module,exports){
+mixin_1.applyMixins(HtmlSource, [ihtml_1.iSourceHtml, iconfig_1.SourceConfigurable, iaudio_1.Audio]);
+},{"../../internal/util/mixin":58,"../source/iaudio":30,"../source/ihtml":36,"../source/source":45,"./iconfig":33}],30:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var item_1 = require('../../internal/item');
+var logger_1 = require('../../internal/util/logger');
+var Audio = (function () {
+    function Audio() {
+    }
+    Audio.prototype._updateId = function (id, sceneId) {
+        this._id = id;
+        this._sceneId = sceneId;
+    };
+    Audio.prototype.getVolume = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getVolume', true);
+                _this._checkPromise = item_1.Item.get('prop:volume', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:volume', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(Number(val));
+            });
+        });
+    };
+    Audio.prototype.setVolume = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            value = value < 0 ? 0 : value > 100 ? 100 : value;
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setVolume', true);
+                _this._checkPromise = item_1.Item.set('prop:volume', String(value), _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:volume', String(value), _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    Audio.prototype.isMute = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isMute', true);
+                _this._checkPromise = item_1.Item.get('prop:mute', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:mute', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    Audio.prototype.setMute = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setMute', true);
+                _this._checkPromise = item_1.Item.set('prop:mute', (value ? '1' : '0'), _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:mute', (value ? '1' : '0'), _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    Audio.prototype.isAutoMute = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isAutoMute', true);
+                _this._checkPromise = item_1.Item.get('prop:keepaudio', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:keepaudio', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(val !== '1');
+            });
+        });
+    };
+    Audio.prototype.setAutoMute = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setAutoMute', true);
+                _this._checkPromise = item_1.Item.set('prop:keepaudio', (value ? '0' : '1'), _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:keepaudio', (value ? '0' : '1'), _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    Audio.prototype.isStreamOnlyAudio = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isStreamOnlyAudio', true);
+                _this._checkPromise = item_1.Item.get('prop:sounddev', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:sounddev', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    Audio.prototype.setStreamOnlyAudio = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setStreamOnlyAudio', true);
+                _this._checkPromise = item_1.Item.set('prop:sounddev', (value ? '1' : '0'), _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:sounddev', (value ? '1' : '0'), _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    Audio.prototype.isAudioAvailable = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isAudioAvailable', true);
+                _this._checkPromise = item_1.Item.get('prop:audioavail', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:audioavail', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    return Audio;
+})();
+exports.Audio = Audio;
+},{"../../internal/item":54,"../../internal/util/logger":57}],31:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var item_1 = require('../../internal/item');
+var logger_1 = require('../../internal/util/logger');
+var SourceAudio = (function () {
+    function SourceAudio() {
+    }
+    SourceAudio.prototype._updateId = function (id, sceneId) {
+        this._id = id;
+        this._sceneId = sceneId;
+    };
+    SourceAudio.prototype.isSilenceDetectionEnabled = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isSilenceDetectionEnabled', true);
+                item_1.Item.get('prop:AudioGainEnable', _this._id).then(function (val) {
+                    resolve(val === '1');
+                });
+            }
+            else {
+                //wrapget
+                item_1.Item.wrapGet('prop:AudioGainEnable', _this._srcId, _this._id, _this._updateId.bind(_this)).then(function (val) {
+                    resolve(val === '1');
+                });
+            }
+        });
+    };
+    SourceAudio.prototype.setSilenceDetectionEnabled = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setSilenceDetectionEnabled', true);
+                item_1.Item.set('prop:AudioGainEnable', (value ? '1' : '0'), _this._id)
+                    .then(function (res) {
+                    resolve(_this);
+                });
+            }
+            else {
+                //wrapset
+                item_1.Item.wrapSet('prop:AudioGainEnable', (value ? '1' : '0'), _this._srcId, _this._id, _this._updateId.bind(_this))
+                    .then(function (res) {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    SourceAudio.prototype.getSilenceThreshold = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getSilenceThreshold', true);
+                item_1.Item.get('prop:AudioGain', _this._id).then(function (val) {
+                    resolve(Number(val));
+                });
+            }
+            else {
+                //wrapget
+                item_1.Item.wrapGet('prop:AudioGain', _this._srcId, _this._id, _this._updateId.bind(_this))
+                    .then(function (val) {
+                    resolve(Number(val));
+                });
+            }
+        });
+    };
+    SourceAudio.prototype.setSilenceThreshold = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof value !== 'number') {
+                reject(Error('Only numbers are acceptable values for threshold'));
+            }
+            else if (value % 1 !== 0 || value < 0 || value > 128) {
+                reject(Error('Only integers in the range 0-128 are acceptable for threshold'));
+            }
+            else {
+                if (_this._isItemCall) {
+                    logger_1.Logger.warn('sourceWarning', 'setSilenceThreshold', true);
+                    item_1.Item.set('prop:AudioGain', String(value), _this._id).then(function (res) {
+                        resolve(_this);
+                    });
+                }
+                else {
+                    item_1.Item.wrapSet('prop:AudioGain', String(value), _this._srcId, _this._id, _this._updateId.bind(_this)).then(function (res) {
+                        resolve(_this);
+                    });
+                }
+            }
+        });
+    };
+    SourceAudio.prototype.getSilencePeriod = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getSilencePeriod', true);
+                item_1.Item.get('prop:AudioGainLatency', _this._id).then(function (val) {
+                    resolve(Number(val));
+                });
+            }
+            else {
+                item_1.Item.wrapGet('prop:AudioGainLatency', _this._srcId, _this._id, _this._updateId.bind(_this)).then(function (val) {
+                    resolve(Number(val));
+                });
+            }
+        });
+    };
+    SourceAudio.prototype.setSilencePeriod = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof value !== 'number') {
+                reject(Error('Only numbers are acceptable values for period'));
+            }
+            else if (value % 1 !== 0 || value < 0 || value > 10000) {
+                reject(Error('Only integers in the range 0-10000 are acceptable for period'));
+            }
+            else {
+                if (_this._isItemCall) {
+                    logger_1.Logger.warn('sourceWarning', 'setSilencePeriod', true);
+                    item_1.Item.set('prop:AudioGainLatency', String(value), _this._id).then(function (res) {
+                        resolve(_this);
+                    });
+                }
+                else {
+                    item_1.Item.wrapSet('prop:AudioGainLatency', String(value), _this._srcId, _this._id, _this._updateId.bind(_this)).then(function (res) {
+                        resolve(_this);
+                    });
+                }
+            }
+        });
+    };
+    SourceAudio.prototype.getAudioOffset = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getAudioOffset', true);
+                item_1.Item.get('prop:AudioDelay', _this._id).then(function (val) {
+                    resolve(Number(val));
+                });
+            }
+            else {
+                item_1.Item.wrapGet('prop:AudioDelay', _this._srcId, _this._id, _this._updateId.bind(_this)).then(function (val) {
+                    resolve(Number(val));
+                });
+            }
+        });
+    };
+    SourceAudio.prototype.setAudioOffset = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof value !== 'number') {
+                reject(Error('Only numbers are acceptable values for period'));
+            }
+            else if (value < 0) {
+                reject(Error('Audio offset cannot be negative'));
+            }
+            else {
+                if (_this._isItemCall) {
+                    logger_1.Logger.warn('sourceWarning', 'setAudioOffset', true);
+                    item_1.Item.set('prop:AudioDelay', String(value), _this._id).then(function (res) {
+                        resolve(_this);
+                    });
+                }
+                else {
+                    item_1.Item.wrapSet('prop:AudioDelay', String(value), _this._srcId, _this._id, _this._updateId.bind(_this)).then(function (res) {
+                        resolve(_this);
+                    });
+                }
+            }
+        });
+    };
+    return SourceAudio;
+})();
+exports.SourceAudio = SourceAudio;
+},{"../../internal/item":54,"../../internal/util/logger":57}],32:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var item_1 = require('../../internal/item');
+var system_1 = require('../../system/system');
+var logger_1 = require('../../internal/util/logger');
+var SourceCamera = (function () {
+    function SourceCamera() {
+        this._delayExclusionObject = {
+            roxio: "vid_1b80&pid_e0(01|11|12)",
+            hauppauge1: "vid_2040&pid_49(0[0-3]|8[0-3])",
+            hauppauge2: "vid_2040&pid_e50[012a4]"
+        };
+    }
+    SourceCamera.prototype._updateId = function (id, sceneId) {
+        this._id = id;
+        this._sceneId = sceneId;
+    };
+    SourceCamera.prototype.getDeviceId = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getDeviceId', true);
+                item_1.Item.get('prop:item', _this._id).then(function (val) {
+                    resolve(val);
+                });
+            }
+            else {
+                item_1.Item.wrapGet('prop:item', _this._srcId, _this._id, _this._updateId.bind(_this)).then(function (val) {
+                    resolve(val);
+                });
+            }
+        });
+    };
+    SourceCamera.prototype.getAudioOffset = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var streamDelay, audioDelay;
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getAudioOffset', true);
+                item_1.Item.get('prop:StreamDelay', _this._id).then(function (val) {
+                    streamDelay = Number(val);
+                    return item_1.Item.get('prop:AudioDelay', _this._id);
+                }).then(function (val) {
+                    audioDelay = Number(val);
+                    resolve((audioDelay - streamDelay) / 10000);
+                });
+            }
+            else {
+                item_1.Item.wrapGet('prop:StreamDelay', _this._srcId, _this._id, _this._updateId.bind(_this)).then(function (val) {
+                    streamDelay = Number(val);
+                    return item_1.Item.get('prop:AudioDelay', _this._id);
+                }).then(function (val) {
+                    audioDelay = Number(val);
+                    resolve((audioDelay - streamDelay) / 10000);
+                });
+            }
+        });
+    };
+    SourceCamera.prototype.setAudioOffset = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            var itemAudio, delay;
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setAudioOffset', true);
+                _this._checkPromise = item_1.Item.get('prop:itemaudio', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:itemaudio', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                itemAudio = val;
+                return _this.isAudioAvailable();
+            }).then(function (val) {
+                if (val === false && itemAudio === '') {
+                    reject(Error('Device has no audio'));
+                }
+                else {
+                    return _this.getDelay();
+                }
+            }).then(function (val) {
+                delay = val;
+                if (value >= 0) {
+                    return item_1.Item.set('prop:StreamDelay', String(delay * 10000), _this._id);
+                }
+                else {
+                    return item_1.Item.set('prop:StreamDelay', String((delay + (value * -1)) * 10000), _this._id);
+                }
+            }).then(function (val) {
+                if (value >= 0) {
+                    return item_1.Item.set('prop:AudioDelay', String((delay + value) * 10000), _this._id);
+                }
+                else {
+                    return item_1.Item.set('prop:AudioDelay', String(delay * 10000), _this._id);
+                }
+            }).then(function (val) {
+                resolve(_this);
+            });
+        });
+    };
+    SourceCamera.prototype.getAudioInput = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            var itemAudioId;
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getAudioInput', true);
+                _this._checkPromise = item_1.Item.get('prop:itemaudio', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:itemaudio', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                if (val === '') {
+                    reject(Error('No tied audio input'));
+                }
+                else {
+                    itemAudioId = val;
+                    return system_1.System.getMicrophones();
+                }
+            }).then(function (val) {
+                var micDevice;
+                if (val !== undefined) {
+                    for (var i = 0; i < val.length; ++i) {
+                        if (val[i].getDisplayId() === itemAudioId) {
+                            micDevice = val[i];
+                            break;
+                        }
+                    }
+                }
+                if (micDevice !== undefined) {
+                    resolve(micDevice);
+                }
+                else {
+                    reject(Error('Tied audio input not present'));
+                }
+            });
+        });
+    };
+    SourceCamera.prototype.setAudioInput = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setAudioInput', true);
+                item_1.Item.set('prop:itemaudio', value.getDisplayId(), _this._id)
+                    .then(function (val) {
+                    resolve(_this);
+                });
+            }
+            else {
+                item_1.Item.wrapSet('prop:itemaudio', value.getDisplayId(), _this._srcId, _this._id, _this._updateId.bind(_this))
+                    .then(function (val) {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    SourceCamera.prototype.isStreamPaused = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isStreamPaused', true);
+                item_1.Item.get('prop:StreamPause', _this._id).then(function (val) {
+                    resolve(val === '1');
+                });
+            }
+            else {
+                item_1.Item.wrapGet('prop:StreamPause', _this._srcId, _this._id, _this._updateId.bind(_this)).then(function (val) {
+                    resolve(val === '1');
+                });
+            }
+        });
+    };
+    SourceCamera.prototype.setStreamPaused = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setStreamPaused', true);
+                _this._checkPromise = item_1.Item.set('prop:StreamPause', value ? '1' : '0', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:StreamPause', value ? '1' : '0', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                return item_1.Item.get('prop:StreamPause', _this._id);
+            }).then(function (val) {
+                if (value === (val === ('1'))) {
+                    resolve(_this);
+                }
+                else {
+                    reject(Error('Camera feed cannot be paused/resumed or is not present'));
+                }
+            });
+        });
+    };
+    SourceCamera.prototype.isHardwareEncoder = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isHardwareEncoder', true);
+                _this._checkPromise = item_1.Item.get('prop:hwencoder', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:hwencoder', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                if (val === '1') {
+                    resolve(true);
+                }
+                else {
+                    _this.isActive().then(function (isActive) {
+                        if (isActive) {
+                            resolve(false);
+                        }
+                        else {
+                            reject(Error('Cannot check hardware encoding. Device not present'));
+                        }
+                    });
+                }
+            });
+        });
+    };
+    SourceCamera.prototype.isActive = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isActive', true);
+                item_1.Item.get('prop:activestate', _this._id).then(function (val) {
+                    resolve(val === 'active');
+                });
+            }
+            else {
+                item_1.Item.wrapGet('prop:activestate', _this._srcId, _this._id, _this._updateId.bind(_this)).then(function (val) {
+                    resolve(val === 'active');
+                });
+            }
+        });
+    };
+    SourceCamera.prototype.getDelay = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var streamDelay, audioDelay;
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getDelay', true);
+                _this._checkPromise = item_1.Item.get('prop:StreamDelay', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:StreamDelay', _this._srcId, _this._id, _this._updateId.bind(_this)).then(function (val) {
+                    streamDelay = Number(val);
+                    return item_1.Item.get('prop:AudioDelay', _this._id);
+                });
+            }
+            _this._checkPromise.then(function (val) {
+                streamDelay = Number(val);
+                return item_1.Item.get('prop:AudioDelay', _this._id);
+            }).then(function (val) {
+                audioDelay = Number(val);
+                if (streamDelay < audioDelay) {
+                    resolve(streamDelay / 10000);
+                }
+                else {
+                    resolve(audioDelay / 10000);
+                }
+            });
+        });
+    };
+    SourceCamera.prototype.setDelay = function (value) {
+        var _this = this;
+        if (this._isItemCall) {
+            logger_1.Logger.warn('sourceWarning', 'setDelay', true);
+        }
+        return new Promise(function (resolve, reject) {
+            var isPositive, audioOffset;
+            _this.isHardwareEncoder().then(function (val) {
+                if (val === true) {
+                    reject(Error('Cannot set delay to hardware encoder devices'));
+                }
+                else {
+                    return _this.getValue();
+                }
+            }).then(function (val) {
+                for (var key in _this._delayExclusionObject) {
+                    var regex = new RegExp(_this._delayExclusionObject[key].toLowerCase(), 'g');
+                    if (typeof val === 'string' && val.toLowerCase().match(regex) != null) {
+                        reject(Error('Cannot set delay to specific device'));
+                        break;
+                    }
+                }
+                return _this.getAudioOffset();
+            }).then(function (val) {
+                audioOffset = val;
+                if (audioOffset >= 0) {
+                    isPositive = true;
+                    if (_this._isItemCall) {
+                        return item_1.Item.set('prop:StreamDelay', String(value * 10000), _this._id);
+                    }
+                    else {
+                        return item_1.Item.wrapSet('prop:StreamDelay', String(value * 10000), _this._srcId, _this._id, _this._updateId.bind(_this));
+                    }
+                }
+                else {
+                    isPositive = false;
+                    return item_1.Item.set('prop:StreamDelay', String((value + (audioOffset * -1)) * 10000), _this._id);
+                }
+            }).then(function (val) {
+                if (isPositive) {
+                    return item_1.Item.set('prop:AudioDelay', String((value + audioOffset) * 10000), _this._id);
+                }
+                else {
+                    return item_1.Item.set('prop:AudioDelay', String(value * 10000), _this._id);
+                }
+            }).then(function (val) {
+                resolve(_this);
+            });
+        });
+    };
+    SourceCamera.prototype.isForceDeinterlace = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isForceDeinterlace', true);
+                item_1.Item.get('prop:fdeinterlace', _this._id).then(function (val) {
+                    resolve(val === '3');
+                });
+            }
+            else {
+                item_1.Item.wrapGet('prop:fdeinterlace', _this._srcId, _this._id, _this._updateId.bind(_this)).then(function (val) {
+                    resolve(val === '3');
+                });
+            }
+        });
+    };
+    SourceCamera.prototype.setForceDeinterlace = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setForceDeinterlace', true);
+                item_1.Item.set('prop:fdeinterlace', (value ? '3' : '0'), _this._id).then(function () {
+                    resolve(_this);
+                });
+            }
+            else {
+                item_1.Item.wrapSet('prop:fdeinterlace', (value ? '3' : '0'), _this._srcId, _this._id, _this._updateId.bind(_this)).then(function () {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    return SourceCamera;
+})();
+exports.SourceCamera = SourceCamera;
+},{"../../internal/item":54,"../../internal/util/logger":57,"../../system/system":67}],33:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var item_1 = require('../../internal/item');
+var global_1 = require('../../internal/global');
+var internal_1 = require('../../internal/internal');
+var environment_1 = require('../environment');
+var logger_1 = require('../../internal/util/logger');
+var SourceConfigurable = (function () {
+    function SourceConfigurable() {
+    }
+    SourceConfigurable.prototype._updateId = function (id, sceneId) {
+        this._id = id;
+        this._sceneId = sceneId;
+    };
+    SourceConfigurable.prototype.loadConfig = function () {
+        var _this = this;
+        var called = false;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'loadConfig', true);
+                _this._checkPromise = item_1.Item.get('prop:BrowserConfiguration', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:BrowserConfiguration', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (config) {
+                var configObj = config === 'null' ? {} : JSON.parse(config);
+                var persist = global_1.Global.getPersistentConfig();
+                for (var key in persist) {
+                    delete configObj[key];
+                }
+                resolve(configObj);
+            });
+        });
+    };
+    SourceConfigurable.prototype.saveConfig = function (configObj) {
+        var _this = this;
+        if (this._isItemCall) {
+            logger_1.Logger.warn('sourceWarning', 'saveConfig', true);
+        }
+        return new Promise(function (resolve, reject) {
+            if (environment_1.Environment.isSourcePlugin) {
+                var slot;
+                var savingAllowed = false;
+                item_1.Item.attach(_this._id).then(function (res) {
+                    slot = res;
+                    return item_1.Item.get('prop:srcid');
+                }).then(function (srcId) {
+                    if (typeof srcId !== 'string' || srcId === '') {
+                        // version is lower than 2.8
+                        savingAllowed = (slot === 0);
+                    }
+                    else {
+                        savingAllowed = srcId === _this._srcId;
+                    }
+                    // only allow direct saving for self
+                    if (savingAllowed) {
+                        // check for valid object
+                        if ({}.toString.call(configObj) === '[object Object]') {
+                            // add persisted configuration if available
+                            // currently only top level merging is available
+                            var persist = global_1.Global.getPersistentConfig();
+                            for (var key in persist) {
+                                configObj[key] = persist[key];
+                            }
+                            internal_1.exec('SetBrowserProperty', 'Configuration', JSON.stringify(configObj));
+                            resolve(_this);
+                        }
+                        else {
+                            reject(Error('Configuration object should be ' +
+                                'in JSON format.'));
+                        }
+                    }
+                    else {
+                        reject(Error('Sources may only request other ' +
+                            'Sources to save a configuration. Consider ' +
+                            'calling requestSaveConfig() on this Source ' +
+                            'instance instead.'));
+                    }
+                });
+            }
+            else {
+                reject(Error('Extensions and source properties windows are ' +
+                    'not allowed to directly save configuration objects. ' +
+                    'Call requestSaveConfig() instead.'));
+            }
+        });
+    };
+    SourceConfigurable.prototype.requestSaveConfig = function (configObj) {
+        var _this = this;
+        if (this._isItemCall) {
+            logger_1.Logger.warn('sourceWarning', 'requestSaveConfig', true);
+        }
+        return new Promise(function (resolve) {
+            var slot;
+            item_1.Item.attach(_this._id).then(function (res) {
+                slot = res;
+                internal_1.exec('CallInner' + (slot === 0 ? '' : (slot + 1)), 'MessageSource', JSON.stringify({
+                    'request': 'saveConfig',
+                    'data': configObj
+                }));
+                resolve(_this);
+            });
+        });
+    };
+    SourceConfigurable.prototype.applyConfig = function (configObj) {
+        var _this = this;
+        if (this._isItemCall) {
+            logger_1.Logger.warn('sourceWarning', 'applyConfig', true);
+        }
+        return new Promise(function (resolve) {
+            var slot;
+            item_1.Item.attach(_this._id).then(function (res) {
+                slot = res;
+                internal_1.exec('CallInner' + (slot === 0 ? '' : (slot + 1)), 'MessageSource', JSON.stringify({
+                    'request': 'applyConfig',
+                    'data': configObj
+                }));
+                resolve(_this);
+            });
+        });
+    };
+    return SourceConfigurable;
+})();
+exports.SourceConfigurable = SourceConfigurable;
+},{"../../internal/global":51,"../../internal/internal":53,"../../internal/item":54,"../../internal/util/logger":57,"../environment":4}],34:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var item_1 = require('../../internal/item');
+var rectangle_1 = require('../../util/rectangle');
+var logger_1 = require('../../internal/util/logger');
+var SourceFlash = (function () {
+    function SourceFlash() {
+    }
+    SourceFlash.prototype._updateId = function (id, sceneId) {
+        this._id = id;
+        this._sceneId = sceneId;
+    };
+    SourceFlash.prototype.getCustomResolution = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var customSize;
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getCustomResolution', true);
+                _this._checkPromise = item_1.Item.get('prop:BrowserSize', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:BrowserSize', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                if (val !== '') {
+                    var _a = decodeURIComponent(val).split(','), width = _a[0], height = _a[1];
+                    customSize = rectangle_1.Rectangle.fromDimensions(Number(width), Number(height));
+                }
+                else {
+                    customSize = rectangle_1.Rectangle.fromDimensions(0, 0);
+                }
+                resolve(customSize);
+            });
+        });
+    };
+    SourceFlash.prototype.setCustomResolution = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setCustomResolution', true);
+                item_1.Item.set('prop:BrowserSize', value.toDimensionString(), _this._id).then(function () {
+                    resolve(_this);
+                });
+            }
+            else {
+                item_1.Item.wrapSet('prop:BrowserSize', value.toDimensionString(), _this._srcId, _this._id, _this._updateId.bind(_this)).then(function () {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    SourceFlash.prototype.getAllowRightClick = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getAllowRightClick', true);
+                item_1.Item.get('prop:BrowserRightClick', _this._id).then(function (val) {
+                    resolve(val === '1');
+                });
+            }
+            else {
+                item_1.Item.wrapGet('prop:BrowserRightClick', _this._srcId, _this._id, _this._updateId.bind(_this)).then(function (val) {
+                    resolve(val === '1');
+                });
+            }
+        });
+    };
+    SourceFlash.prototype.setAllowRightClick = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setAllowRightClick', true);
+                item_1.Item.set('prop:BrowserRightClick', (value ? '1' : '0'), _this._id)
+                    .then(function () {
+                    resolve(_this);
+                });
+            }
+            else {
+                item_1.Item.wrapSet('prop:BrowserRightClick', (value ? '1' : '0'), _this._srcId, _this._id, _this._updateId.bind(_this))
+                    .then(function () {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    return SourceFlash;
+})();
+exports.SourceFlash = SourceFlash;
+},{"../../internal/item":54,"../../internal/util/logger":57,"../../util/rectangle":74}],35:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var item_1 = require('../../internal/item');
+var environment_1 = require('../environment');
+var xml_1 = require('../../internal/util/xml');
+var json_1 = require('../../internal/util/json');
+var isource_1 = require('./isource');
+var logger_1 = require('../../internal/util/logger');
+var iSourceGame = (function () {
+    function iSourceGame() {
+    }
+    iSourceGame.prototype._updateId = function (id, sceneId) {
+        this._id = id;
+        this._sceneId = sceneId;
+    };
+    iSourceGame.prototype.isSpecialOptimizationEnabled = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isSpecialOptimizationEnabled', true);
+                item_1.Item.get('GameCapSurfSharing', _this._id).then(function (res) {
+                    resolve(res === '1');
+                });
+            }
+            else {
+                item_1.Item.wrapGet('GameCapSurfSharing', _this._srcId, _this._id, _this._updateId.bind(_this)).then(function (res) {
+                    resolve(res === '1');
+                });
+            }
+        });
+    };
+    iSourceGame.prototype.setSpecialOptimizationEnabled = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setSpecialOptimizationEnabled', true);
+                item_1.Item.set('GameCapSurfSharing', (value ? '1' : '0'), _this._id).then(function () {
+                    resolve(_this);
+                });
+            }
+            else {
+                item_1.Item.wrapSet('GameCapSurfSharing', (value ? '1' : '0'), _this._srcId, _this._id, _this._updateId.bind(_this)).then(function () {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    iSourceGame.prototype.isShowMouseEnabled = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isShowMouseEnabled', true);
+                item_1.Item.get('GameCapShowMouse', _this._id).then(function (res) {
+                    resolve(res === '1');
+                });
+            }
+            else {
+                item_1.Item.wrapGet('GameCapShowMouse', _this._srcId, _this._id, _this._updateId.bind(_this)).then(function (res) {
+                    resolve(res === '1');
+                });
+            }
+        });
+    };
+    iSourceGame.prototype.setShowMouseEnabled = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setShowMouseEnabled', true);
+                item_1.Item.set('GameCapShowMouse', (value ? '1' : '0'), _this._id).then(function () {
+                    resolve(_this);
+                });
+            }
+            else {
+                item_1.Item.wrapSet('GameCapShowMouse', (value ? '1' : '0'), _this._srcId, _this._id, _this._updateId.bind(_this)).then(function () {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    iSourceGame.prototype.setOfflineImage = function (path) {
+        var _this = this;
+        if (this._isItemCall) {
+            logger_1.Logger.warn('sourceWarning', 'setOfflineImage', true);
+        }
+        return new Promise(function (resolve, reject) {
+            if (_this._type !== isource_1.ItemTypes.GAMESOURCE) {
+                reject(Error('Current item should be a game item'));
+            }
+            else if (environment_1.Environment.isSourcePlugin()) {
+                reject(Error('Source plugins cannot update offline images of other items'));
+            }
+            else if (!(_this._value instanceof xml_1.XML)) {
+                _this.getValue().then(function () {
+                    _this.setOfflineImage(path).then(function (itemObj) {
+                        resolve(itemObj);
+                    });
+                });
+            }
+            else {
+                var regExp = new RegExp('^(([A-Z|a-z]:\\\\[^*|"<>?\n]*)|(\\\\\\\\.*?' +
+                    '\\\\.*)|([A-Za-z]+\\\\[^*|"<>?\\n]*))\.(png|gif|jpg|jpeg|tif)$');
+                if (regExp.test(path) || path === '') {
+                    var valueObj = json_1.JSON.parse(_this._value.toString());
+                    valueObj['replace'] = path;
+                    _this.setValue(xml_1.XML.parseJSON(valueObj)).then(function () {
+                        resolve(_this);
+                    });
+                }
+            }
+        });
+    };
+    iSourceGame.prototype.getOfflineImage = function () {
+        var _this = this;
+        if (this._isItemCall) {
+            logger_1.Logger.warn('sourceWarning', 'getOfflineImage', true);
+        }
+        return new Promise(function (resolve, reject) {
+            if (_this._type !== isource_1.ItemTypes.GAMESOURCE) {
+                reject(Error('Current item should be a game item'));
+            }
+            else {
+                _this.getValue().then(function () {
+                    var valueObj = json_1.JSON.parse(_this._value.toString());
+                    resolve(valueObj['replace'] ? valueObj['replace'] : '');
+                });
+            }
+        });
+    };
+    return iSourceGame;
+})();
+exports.iSourceGame = iSourceGame;
+},{"../../internal/item":54,"../../internal/util/json":56,"../../internal/util/logger":57,"../../internal/util/xml":60,"../environment":4,"./isource":41}],36:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var internal_1 = require('../../internal/internal');
+var item_1 = require('../../internal/item');
+var rectangle_1 = require('../../util/rectangle');
+var environment_1 = require('../environment');
+var logger_1 = require('../../internal/util/logger');
+var LoadStatus = {
+    loaded: 'LOADED',
+    not_loaded: 'NOT LOADED',
+    load_error: 'LOAD ERROR',
+    unknown: 'UNKNOWN'
+};
+var iSourceHtml = (function () {
+    function iSourceHtml() {
+    }
+    iSourceHtml.prototype._updateId = function (id, sceneId) {
+        this._id = id;
+        this._sceneId = sceneId;
+    };
+    /**
+     * param: (func: string, arg: string)
+     * ```
+     * return: Promise<HtmlSource>
+     * ```
+     *
+     * Allow this item to call a pre-exposed function within the HTML Item
+     */
+    iSourceHtml.prototype.call = function (func, arg) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var slot;
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'call', true);
+                _this._checkPromise = item_1.Item.attach(_this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.attach(_this._id);
+            }
+            _this._checkPromise.then(function (res) {
+                slot = res;
+                internal_1.exec('CallInner' +
+                    (String(slot) === '0' ? '' : slot + 1), func, arg);
+                resolve(_this);
+            });
+        });
+    };
+    /**
+     * return: Promise<string>
+     *
+     * Gets the URL of this webpage item.
+     */
+    iSourceHtml.prototype.getURL = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getURL', true);
+                _this._checkPromise = item_1.Item.get('prop:srcitem', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:srcitem', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (url) {
+                var _url = String(url).split('*');
+                url = _url[0];
+                resolve(url);
+            });
+        });
+    };
+    /**
+     * param: (url: string)
+     * ```
+     * return: Promise<HtmlSource>
+     * ```
+     *
+     * Sets the URL of this webpage item.
+     *
+     * *Chainable.*
+     */
+    iSourceHtml.prototype.setURL = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setURL', true);
+                _this._checkPromise = item_1.Item.get('prop:srcitem', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:srcitem', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (url) {
+                var _url = String(url).split('*');
+                _url[0] = value;
+                return item_1.Item.set('prop:srcitem', _url.join('*'), _this._id);
+            }).then(function (code) {
+                if (code) {
+                    resolve(_this);
+                }
+                else {
+                    reject(Error('Invalid value'));
+                }
+            });
+        });
+    };
+    iSourceHtml.prototype.isBrowserTransparent = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isBrowserTransparent', true);
+                _this._checkPromise = item_1.Item.get('prop:BrowserTransparent', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:BrowserTransparent', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (isTransparent) {
+                resolve(isTransparent === '1');
+            });
+        });
+    };
+    iSourceHtml.prototype.enableBrowserTransparency = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'enableBrowserTransparency', true);
+                _this._checkPromise = item_1.Item.set('prop:BrowserTransparent', (value ? '1' : '0'), _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:BrowserTransparent', (value ? '1' : '0'), _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    iSourceHtml.prototype.isBrowser60FPS = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isBrowser60FPS', true);
+                _this._checkPromise = item_1.Item.get('prop:Browser60fps', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:Browser60fps', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (isBrowser60FPS) {
+                resolve(isBrowser60FPS === '1');
+            });
+        });
+    };
+    iSourceHtml.prototype.enableBrowser60FPS = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isBrowser60FPS', true);
+                _this._checkPromise = item_1.Item.get('prop:Browser60fps', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:Browser60fps', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (isBrowser60FPS) {
+                if ((isBrowser60FPS === '1') !== value) {
+                    item_1.Item.set('prop:Browser60fps', (value ? '1' : '0'), _this._id);
+                }
+                resolve(_this);
+            });
+        });
+    };
+    iSourceHtml.prototype.getBrowserCustomSize = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var customSize;
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getBrowserCustomSize', true);
+                _this._checkPromise = item_1.Item.get('prop:BrowserSize', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:BrowserSize', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                if (val !== '') {
+                    var _a = decodeURIComponent(val).split(','), width = _a[0], height = _a[1];
+                    customSize = rectangle_1.Rectangle.fromDimensions(Number(width) / window.devicePixelRatio, Number(height) / window.devicePixelRatio);
+                }
+                else {
+                    customSize = rectangle_1.Rectangle.fromDimensions(0, 0);
+                }
+                resolve(customSize);
+            });
+        });
+    };
+    iSourceHtml.prototype.setBrowserCustomSize = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            // Set the correct width and height based on the DPI settings
+            value.setWidth(value.getWidth() * window.devicePixelRatio);
+            value.setHeight(value.getHeight() * window.devicePixelRatio);
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setBrowserCustomSize', true);
+                _this._checkPromise = item_1.Item.set('prop:BrowserSize', value.toDimensionString(), _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:BrowserSize', value.toDimensionString(), _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    iSourceHtml.prototype.getAllowRightClick = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getAllowRightClick', true);
+                _this._checkPromise = item_1.Item.get('prop:BrowserRightClick', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:BrowserRightClick', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    iSourceHtml.prototype.setAllowRightClick = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setAllowRightClick', true);
+                _this._checkPromise = item_1.Item.set('prop:BrowserRightClick', (value ? '1' : '0'), _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:BrowserRightClick', (value ? '1' : '0'), _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    iSourceHtml.prototype.getBrowserJS = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getBrowserJS', true);
+                _this._checkPromise = item_1.Item.get('prop:custom', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:custom', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (custom) {
+                var customJS = '';
+                try {
+                    var customObject = JSON.parse(custom);
+                    if (customObject.hasOwnProperty('customJS')) {
+                        customJS = customObject['customJS'];
+                    }
+                }
+                catch (e) {
+                }
+                resolve(customJS);
+            });
+        });
+    };
+    iSourceHtml.prototype.setBrowserJS = function (value, refresh) {
+        var _this = this;
+        if (refresh === void 0) { refresh = false; }
+        return new Promise(function (resolve, reject) {
+            var customObject = {};
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setBrowserJS', true);
+                _this._checkPromise = item_1.Item.get('prop:custom', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:custom', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (custom) {
+                var customJS = '';
+                var customCSS = '';
+                var scriptString = ' ';
+                var scriptEnabled = true;
+                var cssEnabled = true;
+                try {
+                    customObject = JSON.parse(custom);
+                    if (customObject.hasOwnProperty('cssEnabled')) {
+                        cssEnabled = (customObject['cssEnabled'] == 'true');
+                    }
+                    if (customObject.hasOwnProperty('scriptEnabled')) {
+                        scriptEnabled = (customObject['scriptEnabled'] == 'true');
+                    }
+                    if (customObject.hasOwnProperty('customCSS')) {
+                        customCSS = customObject['customCSS'];
+                    }
+                }
+                catch (e) {
+                }
+                customObject['cssEnabled'] = cssEnabled.toString();
+                customObject['scriptEnabled'] = scriptEnabled.toString();
+                customObject['customCSS'] = customCSS;
+                customObject['customJS'] = value;
+                if (cssEnabled === true) {
+                    var cssScript = "var xjsCSSOverwrite = document.createElement('style');xjsCSSOverwrite.id = 'splitmedialabsCSSOverwrite';xjsCSSOverwrite.type = 'text/css';var h = document.querySelector('head');var existing = document.querySelector('head #splitmedialabsCSSOverwrite');if (existing != null)h.removeChild(existing);xjsCSSOverwrite.innerHTML = '" + customCSS.replace(/(\r\n|\n|\r)/gm, '').replace(/\s{2,}/g, ' ').replace(/(\[br\])/gm, '') + "';h.appendChild(xjsCSSOverwrite);";
+                    scriptString = scriptString + cssScript;
+                }
+                if (value !== '' && scriptEnabled === true) {
+                    scriptString = scriptString + value;
+                }
+                return item_1.Item.set('prop:BrowserJs', scriptString, _this._id);
+            })
+                .then(function () {
+                return item_1.Item.set('prop:custom', JSON.stringify(customObject), _this._id);
+            })
+                .then(function () {
+                if (refresh) {
+                    item_1.Item.set('refresh', '', _this._id).then(function () {
+                        resolve(_this);
+                    });
+                }
+                else {
+                    resolve(_this);
+                }
+            });
+        });
+    };
+    iSourceHtml.prototype.isBrowserJSEnabled = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isBrowserJSEnabled', true);
+                _this._checkPromise = item_1.Item.get('prop:custom', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:custom', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (custom) {
+                var enabled = true;
+                try {
+                    var customObject = JSON.parse(custom);
+                    if (customObject.hasOwnProperty('scriptEnabled')) {
+                        enabled = (customObject['scriptEnabled'] == 'true');
+                    }
+                }
+                catch (e) {
+                }
+                resolve(enabled);
+            });
+        });
+    };
+    iSourceHtml.prototype.enableBrowserJS = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            var customObject = {};
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'enableBrowserJS', true);
+                _this._checkPromise = item_1.Item.get('prop:custom', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:custom', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (custom) {
+                var customJS = '';
+                var customCSS = '';
+                var scriptString = ' ';
+                var scriptEnabled = true;
+                var cssEnabled = true;
+                try {
+                    customObject = JSON.parse(custom);
+                    if (customObject.hasOwnProperty('cssEnabled')) {
+                        cssEnabled = (customObject['cssEnabled'] == 'true');
+                    }
+                    if (customObject.hasOwnProperty('customJS')) {
+                        customJS = customObject['customJS'];
+                    }
+                    if (customObject.hasOwnProperty('customCSS')) {
+                        customCSS = customObject['customCSS'];
+                    }
+                }
+                catch (e) {
+                }
+                customObject['cssEnabled'] = cssEnabled.toString();
+                customObject['scriptEnabled'] = value.toString();
+                customObject['customJS'] = customJS;
+                customObject['customCSS'] = customCSS;
+                if (cssEnabled === true) {
+                    var cssScript = 'var xjsCSSOverwrite = document.createElement("style");' +
+                        'xjsCSSOverwrite.id = "splitmedialabsCSSOverwrite";' +
+                        'xjsCSSOverwrite.type = "text/css";' +
+                        'var h = document.querySelector("head");' +
+                        'var existing = document' +
+                        '.querySelector("head #splitmedialabsCSSOverwrite");' +
+                        'if (existing != null)h.removeChild(existing);' +
+                        'xjsCSSOverwrite.innerHTML = "' +
+                        customCSS.replace(/(\r\n|\n|\r)/gm, '')
+                            .replace(/\s{2,}/g, ' ').replace(/(\[br\])/gm, '') + '";"' +
+                        'h.appendChild(xjsCSSOverwrite);';
+                    scriptString = scriptString + cssScript;
+                }
+                if (customJS !== '' && value === true) {
+                    scriptString = scriptString + customJS;
+                }
+                return item_1.Item.set('prop:BrowserJs', scriptString, _this._id);
+            })
+                .then(function () {
+                return item_1.Item.set('prop:custom', JSON.stringify(customObject), _this._id);
+            })
+                .then(function () {
+                if (!value) {
+                    item_1.Item.set('refresh', '', _this._id).then(function () {
+                        resolve(_this);
+                    });
+                }
+                else {
+                    resolve(_this);
+                }
+            });
+        });
+    };
+    iSourceHtml.prototype.getCustomCSS = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getCustomCSS', true);
+                _this._checkPromise = item_1.Item.get('prop:custom', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:custom', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (custom) {
+                var customCSS = '';
+                try {
+                    var customObject = JSON.parse(custom);
+                    if (customObject.hasOwnProperty('customCSS')) {
+                        customCSS = customObject['customCSS'];
+                    }
+                }
+                catch (e) {
+                }
+                resolve(customCSS);
+            });
+        });
+    };
+    iSourceHtml.prototype.setCustomCSS = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            var customObject = {};
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setCustomCSS', true);
+                _this._checkPromise = item_1.Item.get('prop:custom', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:custom', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (custom) {
+                var customJS = '';
+                var customCSS = '';
+                var scriptString = ' ';
+                var scriptEnabled = true;
+                var cssEnabled = true;
+                try {
+                    customObject = JSON.parse(custom);
+                    if (customObject.hasOwnProperty('cssEnabled')) {
+                        cssEnabled = (customObject['cssEnabled'] == 'true');
+                    }
+                    if (customObject.hasOwnProperty('scriptEnabled')) {
+                        scriptEnabled = (customObject['scriptEnabled'] == 'true');
+                    }
+                    if (customObject.hasOwnProperty('customJS')) {
+                        customJS = customObject['customJS'];
+                    }
+                }
+                catch (e) {
+                }
+                customObject['cssEnabled'] = cssEnabled.toString();
+                customObject['scriptEnabled'] = scriptEnabled.toString();
+                customObject['customJS'] = customJS;
+                customObject['customCSS'] = value;
+                if (cssEnabled === true) {
+                    var cssScript = 'var xjsCSSOverwrite = document.createElement("style");' +
+                        'xjsCSSOverwrite.id = "splitmedialabsCSSOverwrite";' +
+                        'xjsCSSOverwrite.type = "text/css";' +
+                        'var h = document.querySelector("head");' +
+                        'var existing = document' +
+                        '.querySelector("head #splitmedialabsCSSOverwrite");' +
+                        'if (existing != null)h.removeChild(existing);' +
+                        'xjsCSSOverwrite.innerHTML = "' +
+                        value.replace(/(\r\n|\n|\r)/gm, '')
+                            .replace(/\s{2,}/g, ' ').replace(/(\[br\])/gm, '') +
+                        '";h.appendChild(xjsCSSOverwrite);';
+                    scriptString = scriptString + cssScript;
+                }
+                if (customJS !== '' && scriptEnabled === true) {
+                    scriptString = scriptString + customJS;
+                }
+                return item_1.Item.set('prop:BrowserJs', scriptString, _this._id);
+            })
+                .then(function () {
+                return item_1.Item.set('prop:custom', JSON.stringify(customObject), _this._id);
+            })
+                .then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    iSourceHtml.prototype.isCustomCSSEnabled = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isCustomCSSEnabled', true);
+                _this._checkPromise = item_1.Item.get('prop:custom', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:custom', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (custom) {
+                var enabled = true;
+                try {
+                    var customObject = JSON.parse(custom);
+                    if (customObject.hasOwnProperty('cssEnabled')) {
+                        enabled = (customObject['cssEnabled'] == 'true');
+                    }
+                }
+                catch (e) {
+                }
+                resolve(enabled);
+            });
+        });
+    };
+    iSourceHtml.prototype.enableCustomCSS = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            var customObject = {};
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'enableCustomCSS', true);
+                _this._checkPromise = item_1.Item.get('prop:custom', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:custom', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (custom) {
+                var customJS = '';
+                var customCSS = '';
+                var scriptString = ' ';
+                var scriptEnabled = true;
+                var cssEnabled = true;
+                try {
+                    customObject = JSON.parse(custom);
+                    if (customObject.hasOwnProperty('scriptEnabled')) {
+                        scriptEnabled = (customObject['scriptEnabled'] == 'true');
+                    }
+                    if (customObject.hasOwnProperty('customJS')) {
+                        customJS = customObject['customJS'];
+                    }
+                    if (customObject.hasOwnProperty('customCSS')) {
+                        customCSS = customObject['customCSS'];
+                    }
+                }
+                catch (e) {
+                }
+                customObject['scriptEnabled'] = scriptEnabled.toString();
+                customObject['cssEnabled'] = value.toString();
+                customObject['customJS'] = customJS;
+                customObject['customCSS'] = customCSS;
+                if (value === true) {
+                    var cssScript = 'var xjsCSSOverwrite = document.createElement("style");' +
+                        'xjsCSSOverwrite.id = "splitmedialabsCSSOverwrite";' +
+                        'xjsCSSOverwrite.type = "text/css";' +
+                        'var h = document.querySelector("head");' +
+                        'var existing = document' +
+                        '.querySelector("head #splitmedialabsCSSOverwrite");' +
+                        'if (existing != null)h.removeChild(existing);' +
+                        'xjsCSSOverwrite.innerHTML = "' +
+                        customCSS.replace(/(\r\n|\n|\r)/gm, '')
+                            .replace(/\s{2,}/g, ' ').replace(/(\[br\])/gm, '') +
+                        '";h.appendChild(xjsCSSOverwrite);';
+                    scriptString = scriptString + cssScript;
+                }
+                if (customJS !== '' && value === scriptEnabled) {
+                    scriptString = scriptString + customJS;
+                }
+                return item_1.Item.set('prop:BrowserJs', scriptString, _this._id);
+            })
+                .then(function () {
+                return item_1.Item.set('prop:custom', JSON.stringify(customObject), _this._id);
+            })
+                .then(function () {
+                if (!value) {
+                    var cssScript = "var h = document.querySelector('head');var existing3 = document.querySelector('head #splitmedialabsCSSOverwrite');if (existing3 != null)h.removeChild(existing3);";
+                    if (environment_1.Environment.isSourcePlugin()) {
+                        eval(cssScript);
+                    }
+                    else {
+                        internal_1.exec('CallInner', 'eval', cssScript);
+                    }
+                    resolve(_this);
+                }
+                else {
+                    resolve(_this);
+                }
+            });
+        });
+    };
+    iSourceHtml.prototype.isBrowserOptimized = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isBrowserOptimized', true);
+                _this._checkPromise = item_1.Item.get('prop:GameCapSurfSharingCurrent', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:GameCapSurfSharingCurrent', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    iSourceHtml.prototype.getBrowserLoadStatus = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getBrowserLoadStatus', true);
+                _this._checkPromise = item_1.Item.get('BrowserLoadStatus', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('BrowserLoadStatus', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (loadStatus) {
+                if (loadStatus === 'null') {
+                    resolve('UNAVAILABLE');
+                }
+                else {
+                    resolve(LoadStatus[loadStatus]);
+                }
+            });
+        });
+    };
+    return iSourceHtml;
+})();
+exports.iSourceHtml = iSourceHtml;
+},{"../../internal/internal":53,"../../internal/item":54,"../../internal/util/logger":57,"../../util/rectangle":74,"../environment":4}],37:[function(require,module,exports){
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
     function __() { this.constructor = d; }
     __.prototype = b.prototype;
     d.prototype = new __();
 };
-var image_1 = require('../items/image');
+var source_1 = require('../source/source');
 /**
- * > #### For Deprecation
- * This Class is deprecated and will be removed soon. Please use
- * {@link #core/ImageItem ImageItem} instead. This Class shares the same
- * methods with ImageItem.
+ * The ImageSource class represents the sources of the image items that
+ * has been added to the stage. A single source could have multiple items linked
+ * into it and any changes to the source would affect all items linked to it.
+ *
+ * Each item is represented by the ImageItem class.
+ * See: {@link #core/ImageItem Core/ImageItem}
+ *
+ * Inherits from: {@link #core/Source Core/Source}
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var xjs = require('xjs');
+ *
+ * xjs.Scene.getActiveScene().then(function(scene) {
+ *   scene.getSources().then(function(sources) {
+ *   for (var i in sources) {
+ *       if (sources[i] instanceof XJS.ImageSource) {
+ *         // Manipulate your image source here
+ *         sources[i].setSilenceDetectionEnabled(true);
+ *       }
+ *     }
+ *   })
+ * })
+ * ```
+ *
+ * All methods marked as *Chainable* resolve with the original `ImageSource`
+ * instance.
  */
 var ImageSource = (function (_super) {
     __extends(ImageSource, _super);
@@ -8078,21 +8302,1306 @@ var ImageSource = (function (_super) {
         _super.apply(this, arguments);
     }
     return ImageSource;
-})(image_1.ImageItem);
+})(source_1.Source);
 exports.ImageSource = ImageSource;
-},{"../items/image":19}],33:[function(require,module,exports){
+},{"../source/source":45}],38:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var item_1 = require('../../internal/item');
+var json_1 = require('../../internal/util/json');
+var logger_1 = require('../../internal/util/logger');
+var SourceMedia = (function () {
+    function SourceMedia() {
+    }
+    SourceMedia.prototype._updateId = function (id, sceneId) {
+        this._id = id;
+        this._sceneId = sceneId;
+    };
+    SourceMedia.prototype.getFileInfo = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getFileInfo', true);
+                _this._checkPromise = item_1.Item.get('FileInfo', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('FileInfo', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                try {
+                    var fileInfoObj = {};
+                    var fileInfoJXON = json_1.JSON.parse(val);
+                    if (typeof fileInfoJXON['children'] !== 'undefined'
+                        && fileInfoJXON['children'].length > 0) {
+                        var fileInfoChildren = fileInfoJXON['children'];
+                        for (var i = fileInfoChildren.length - 1; i >= 0; i--) {
+                            var child = fileInfoChildren[i];
+                            var childObj = {};
+                            var childObjKeys = Object.keys(child);
+                            for (var j = childObjKeys.length - 1; j >= 0; j--) {
+                                var key = childObjKeys[j];
+                                if (key !== 'value' && key !== 'tag') {
+                                    childObj[key] = child[key];
+                                }
+                            }
+                            var tag = child['tag'];
+                            fileInfoObj[tag] = childObj;
+                        }
+                        resolve(fileInfoObj);
+                    }
+                    else {
+                        resolve(fileInfoObj);
+                    }
+                }
+                catch (e) {
+                    reject(Error('Error retrieving file information'));
+                }
+            });
+        });
+    };
+    return SourceMedia;
+})();
+exports.SourceMedia = SourceMedia;
+},{"../../internal/item":54,"../../internal/util/json":56,"../../internal/util/logger":57}],39:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var item_1 = require('../../internal/item');
+var cuepoint_1 = require('./cuepoint');
+var logger_1 = require('../../internal/util/logger');
+/**
+ *  Used by sources that implement the Playback interface.
+ */
+(function (ActionAfterPlayback) {
+    ActionAfterPlayback[ActionAfterPlayback["NONE"] = 0] = "NONE";
+    ActionAfterPlayback[ActionAfterPlayback["REWIND"] = 1] = "REWIND";
+    ActionAfterPlayback[ActionAfterPlayback["LOOP"] = 2] = "LOOP";
+    ActionAfterPlayback[ActionAfterPlayback["TRANSPARENT"] = 3] = "TRANSPARENT";
+    ActionAfterPlayback[ActionAfterPlayback["HIDE"] = 4] = "HIDE";
+})(exports.ActionAfterPlayback || (exports.ActionAfterPlayback = {}));
+var ActionAfterPlayback = exports.ActionAfterPlayback;
+var AUDIO_REGEX = /\.(mp3|aac|cda|ogg|m4a|flac|wma|aiff|aif|wav|mid|midi|rma)$/;
+var VIDEO_REGEX = /\.(avi|flv|mkv|mp4|mpg|wmv|3gp|3g2|asf|f4v|mov|mpeg|vob|webm)$/;
+var SourcePlayback = (function () {
+    function SourcePlayback() {
+    }
+    SourcePlayback.prototype._updateId = function (id, sceneId) {
+        this._id = id;
+        this._sceneId = sceneId;
+    };
+    SourcePlayback.prototype.isSeekable = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isSeekable', true);
+                _this._checkPromise = item_1.Item.get('sync:syncable', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('sync:syncable', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(val === '1' ? true : false);
+            });
+        });
+    };
+    SourcePlayback.prototype.getPlaybackPosition = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getPlaybackPosition', true);
+                _this._checkPromise = item_1.Item.get('sync:position', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('sync:position', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(Number(val) / 10000000);
+            });
+        });
+    };
+    SourcePlayback.prototype.setPlaybackPosition = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setPlaybackPosition', true);
+                _this._checkPromise = item_1.Item.set('sync:position', String(value * 10000000), _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('sync:position', String(value * 10000000), _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    SourcePlayback.prototype.getPlaybackDuration = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getPlaybackDuration', true);
+                _this._checkPromise = item_1.Item.get('sync:duration', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('sync:duration', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(Number(val) / 10000000);
+            });
+        });
+    };
+    SourcePlayback.prototype.isPlaying = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isPlaying', true);
+                _this._checkPromise = item_1.Item.get('sync:state', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('sync:state', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(val === "running");
+            });
+        });
+    };
+    SourcePlayback.prototype.setPlaying = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setPlaying', true);
+                _this._checkPromise = item_1.Item.set('sync:state', value ? "running" : "stopped", _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('sync:state', value ? "running" : "stopped", _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    SourcePlayback.prototype.getPlaybackStartPosition = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getPlaybackStartPosition', true);
+                _this._checkPromise = item_1.Item.get('prop:InPoint', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:InPoint', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(Number(val) / 10000000);
+            });
+        });
+    };
+    SourcePlayback.prototype.setPlaybackStartPosition = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setPlaybackStartPosition', true);
+                _this._checkPromise = item_1.Item.set('prop:InPoint', String(value * 10000000), _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:InPoint', String(value * 10000000), _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    SourcePlayback.prototype.getPlaybackEndPosition = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getPlaybackEndPosition', true);
+                _this._checkPromise = item_1.Item.get('prop:OutPoint', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:OutPoint', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(Number(val) / 10000000);
+            });
+        });
+    };
+    SourcePlayback.prototype.setPlaybackEndPosition = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setPlaybackEndPosition', true);
+                _this._checkPromise = item_1.Item.set('prop:OutPoint', String(value * 10000000), _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:OutPoint', String(value * 10000000), _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    SourcePlayback.prototype.getActionAfterPlayback = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getActionAfterPlayback', true);
+                _this._checkPromise = item_1.Item.get('prop:OpWhenFinished', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:OpWhenFinished', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(Number(val));
+            });
+        });
+    };
+    SourcePlayback.prototype.setActionAfterPlayback = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setActionAfterPlayback', true);
+                _this._checkPromise = item_1.Item.set('prop:OpWhenFinished', String(value), _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:OpWhenFinished', String(value), _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    SourcePlayback.prototype.isAutostartOnSceneLoad = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isAutostartOnSceneLoad', true);
+                _this._checkPromise = item_1.Item.get('prop:StartOnLoad', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:StartOnLoad', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    SourcePlayback.prototype.setAutostartOnSceneLoad = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setAutostartOnSceneLoad', true);
+                _this._checkPromise = item_1.Item.set('prop:StartOnLoad', (value ? '1' : '0'), _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:StartOnLoad', (value ? '1' : '0'), _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    SourcePlayback.prototype.isForceDeinterlace = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isForceDeinterlace', true);
+                _this._checkPromise = item_1.Item.get('prop:fdeinterlace', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:fdeinterlace', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(val === '3');
+            });
+        });
+    };
+    SourcePlayback.prototype.setForceDeinterlace = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setForceDeinterlace', true);
+                _this._checkPromise = item_1.Item.set('prop:fdeinterlace', (value ? '3' : '0'), _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:fdeinterlace', (value ? '3' : '0'), _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    SourcePlayback.prototype.isRememberingPlaybackPosition = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isRememberingPlaybackPosition', true);
+                _this._checkPromise = item_1.Item.get('prop:RememberPosition', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:RememberPosition', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    SourcePlayback.prototype.setRememberingPlaybackPosition = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setRememberingPlaybackPosition', true);
+                _this._checkPromise = item_1.Item.set('prop:RememberPosition', (value ? '1' : '0'), _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:RememberPosition', (value ? '1' : '0'), _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    SourcePlayback.prototype.isShowingPlaybackPosition = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isShowingPlaybackPosition', true);
+                _this._checkPromise = item_1.Item.get('prop:ShowPosition', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:ShowPosition', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    SourcePlayback.prototype.setShowingPlaybackPosition = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setShowingPlaybackPosition', true);
+                _this._checkPromise = item_1.Item.set('prop:ShowPositio', (value ? '1' : '0'), _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:ShowPositio', (value ? '1' : '0'), _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    SourcePlayback.prototype.getCuePoints = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getCuePoints', true);
+                _this._checkPromise = item_1.Item.get('prop:CuePoints', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:CuePoints', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (cuePointString) {
+                if (cuePointString === '') {
+                    resolve([]);
+                }
+                else {
+                    var cuePointStrings = cuePointString.split(',');
+                    var cuePoints = cuePointStrings.map(function (string) { return cuepoint_1.CuePoint._fromString(string); });
+                    resolve(cuePoints);
+                }
+            });
+        });
+    };
+    SourcePlayback.prototype.setCuePoints = function (cuePoints) {
+        var _this = this;
+        var cuePointString = cuePoints.map(function (point) { return point.toString(); }).join(',');
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setCuePoints', true);
+                _this._checkPromise = item_1.Item.set('prop:CuePoints', cuePointString, _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:CuePoints', cuePointString, _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    SourcePlayback.prototype.isAudio = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isAudio', true);
+                _this._checkPromise = item_1.Item.get('prop:srcitem', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:srcitem', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (filename) {
+                resolve(AUDIO_REGEX.test(filename));
+            });
+        });
+    };
+    SourcePlayback.prototype.isVideo = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isVideo', true);
+                _this._checkPromise = item_1.Item.get('prop:srcitem', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:srcitem', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (filename) {
+                resolve(VIDEO_REGEX.test(filename));
+            });
+        });
+    };
+    SourcePlayback.prototype.getValue = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            // we do not do any additional checking since we are assured of the type
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getValue', true);
+                _this._checkPromise = item_1.Item.get('prop:srcitem', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:srcitem', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (filename) {
+                resolve(filename);
+            });
+        });
+    };
+    ;
+    SourcePlayback.prototype.setValue = function (filename) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (VIDEO_REGEX.test(filename) || AUDIO_REGEX.test(filename)) {
+                if (_this._isItemCall) {
+                    logger_1.Logger.warn('sourceWarning', 'setValue', true);
+                    _this._checkPromise = item_1.Item.set('prop:srcitem', filename, _this._id);
+                }
+                else {
+                    _this._checkPromise = item_1.Item.wrapSet('prop:srcitem', filename, _this._srcId, _this._id, _this._updateId.bind(_this));
+                }
+                _this._checkPromise
+                    .then(function () { return item_1.Item.set('prop:name', filename, _this._id); })
+                    .then(function () { return item_1.Item.set('prop:CuePoints', '', _this._id); })
+                    .then(function () {
+                    resolve(_this);
+                });
+            }
+            else {
+                reject(Error('You can only set the value to a valid media type'));
+            }
+        });
+    };
+    return SourcePlayback;
+})();
+exports.SourcePlayback = SourcePlayback;
+},{"../../internal/item":54,"../../internal/util/logger":57,"./cuepoint":26}],40:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var item_1 = require('../../internal/item');
+var xml_1 = require('../../internal/util/xml');
+var json_1 = require('../../internal/util/json');
+var rectangle_1 = require('../../util/rectangle');
+var logger_1 = require('../../internal/util/logger');
+var iSourceScreen = (function () {
+    function iSourceScreen() {
+    }
+    iSourceScreen.prototype._updateId = function (id, sceneId) {
+        this._id = id;
+        this._sceneId = sceneId;
+    };
+    iSourceScreen.prototype.isStickToTitle = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'isStickToTitle', true);
+                _this._checkPromise = item_1.Item.get('prop:ScrCapTrackWindowTitle', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:ScrCapTrackWindowTitle', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(val === '0');
+            });
+        });
+    };
+    iSourceScreen.prototype.setStickToTitle = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setStickToTitle', true);
+                _this._checkPromise = item_1.Item.set('prop:ScrCapTrackWindowTitle', value ? '0' : '1', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:ScrCapTrackWindowTitle', value ? '0' : '1', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function () {
+                resolve(_this);
+            });
+        });
+    };
+    iSourceScreen.prototype.getCaptureLayered = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getCaptureLayered', true);
+                _this._checkPromise = item_1.Item.get('prop:ScrCapLayered', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:ScrCapLayered', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    iSourceScreen.prototype.setCaptureLayered = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setCaptureLayered', true);
+                _this._checkPromise = item_1.Item.set('prop:ScrCapLayered', value ? '1' : '0', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:ScrCapLayered', value ? '1' : '0', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(_this);
+            });
+        });
+    };
+    iSourceScreen.prototype.getOptimizedCapture = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getOptimizedCapture', true);
+                _this._checkPromise = item_1.Item.get('prop:ScrCapOptCapture1', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:ScrCapOptCapture1', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    iSourceScreen.prototype.setOptimizedCapture = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setOptimizedCapture', true);
+                _this._checkPromise = item_1.Item.set('prop:ScrCapOptCapture1', value ? '1' : '0', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:ScrCapOptCapture1', value ? '1' : '0', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(_this);
+            });
+        });
+    };
+    iSourceScreen.prototype.getShowMouseClicks = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getShowMouseClicks', true);
+                _this._checkPromise = item_1.Item.get('prop:ScrCapShowClicks', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:ScrCapShowClicks', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    iSourceScreen.prototype.setShowMouseClicks = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setShowMouseClicks', true);
+                _this._checkPromise = item_1.Item.set('prop:ScrCapShowClicks', value ? '1' : '0', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:ScrCapShowClicks', value ? '1' : '0', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(_this);
+            });
+        });
+    };
+    iSourceScreen.prototype.getShowMouse = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getShowMouse', true);
+                _this._checkPromise = item_1.Item.get('prop:ScrCapShowMouse', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:ScrCapShowMouse', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                resolve(val === '1');
+            });
+        });
+    };
+    iSourceScreen.prototype.setShowMouse = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setShowMouse', true);
+                _this._checkPromise = item_1.Item.set('prop:ScrCapShowMouse', value ? '1' : '0', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapSet('prop:ScrCapShowMouse', value ? '1' : '0', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                if (val === true) {
+                    item_1.Item.set('prop:ScrCapShowClicks', value ? '1' : '0', _this._id);
+                }
+                resolve(_this);
+            });
+        });
+    };
+    iSourceScreen.prototype.getCaptureArea = function () {
+        var _this = this;
+        if (this._isItemCall) {
+            logger_1.Logger.warn('sourceWarning', 'getCaptureArea', true);
+        }
+        return new Promise(function (resolve) {
+            _this.getValue().then(function (val) {
+                if (!(val instanceof xml_1.XML)) {
+                    resolve(rectangle_1.Rectangle.fromCoordinates(0, 0, 0, 0));
+                }
+                else {
+                    var _value = json_1.JSON.parse(val);
+                    resolve(rectangle_1.Rectangle.fromCoordinates(Number(_value['left']), Number(_value['top']), Number(_value['width']) + Number(_value['left']), Number(_value['height']) + Number(_value['top'])));
+                }
+            });
+        });
+    };
+    iSourceScreen.prototype.setCaptureArea = function (dimension) {
+        var _this = this;
+        if (this._isItemCall) {
+            logger_1.Logger.warn('sourceWarning', 'setCaptureArea', true);
+        }
+        return new Promise(function (resolve) {
+            _this.getValue().then(function (val) {
+                return new Promise(function (iResolve) {
+                    if (_this._isItemCall) {
+                        _this._checkPromise = item_1.Item.get('screenresolution', _this._id);
+                    }
+                    else {
+                        _this._checkPromise = item_1.Item.wrapGet('screenresolution', _this._srcId, _this._id, _this._updateId.bind(_this));
+                    }
+                    _this._checkPromise.then(function (res) {
+                        var _res = res.split(',');
+                        iResolve({
+                            value: val,
+                            res: rectangle_1.Rectangle.fromCoordinates(Number(_res[0]), Number(_res[1]), Number(_res[2]), Number(_res[3]))
+                        });
+                    });
+                });
+            }).then(function (obj) {
+                var _config = new json_1.JSON();
+                if (!(obj.value instanceof xml_1.XML)) {
+                    _config['tag'] = 'screen';
+                    _config['module'] = '';
+                    _config['window'] = '';
+                    _config['hwnd'] = '0';
+                    _config['wclient'] = '0';
+                    _config['left'] = '0';
+                    _config['top'] = '0';
+                    _config['width'] = '0';
+                    _config['height'] = '0';
+                }
+                else {
+                    _config = json_1.JSON.parse(obj.value);
+                }
+                _config['left'] = dimension.getLeft() >= obj.res.getLeft() ?
+                    dimension.getLeft() : Number(_config['left']) >= obj.res.getLeft() ?
+                    _config['left'] : obj.res.getLeft();
+                _config['top'] = dimension.getTop() >= obj.res.getTop() ?
+                    dimension.getTop() : Number(_config['top']) >= obj.res.getTop() ?
+                    _config['top'] : obj.res.getTop();
+                _config['width'] = dimension.getWidth() <= obj.res.getWidth() ?
+                    dimension.getWidth() : Number(_config['width']) <=
+                    obj.res.getWidth() ? _config['width'] : obj.res.getWidth();
+                _config['height'] = dimension.getHeight() <= obj.res.getHeight() ?
+                    dimension.getHeight() : Number(_config['height']) <=
+                    obj.res.getHeight() ? _config['height'] : obj.res.getHeight();
+                _this.setValue(xml_1.XML.parseJSON(_config)).then(function () {
+                    resolve(_this);
+                });
+            });
+        });
+    };
+    iSourceScreen.prototype.isClientArea = function () {
+        var _this = this;
+        if (this._isItemCall) {
+            logger_1.Logger.warn('sourceWarning', 'isClientArea', true);
+        }
+        return new Promise(function (resolve) {
+            _this.getValue().then(function (val) {
+                if (!(val instanceof xml_1.XML)) {
+                    resolve(false);
+                }
+                else {
+                    var _value = json_1.JSON.parse(val);
+                    resolve(_value['wclient'] === '1');
+                }
+            });
+        });
+    };
+    iSourceScreen.prototype.setClientArea = function (value) {
+        var _this = this;
+        if (this._isItemCall) {
+            logger_1.Logger.warn('sourceWarning', 'setClientArea', true);
+        }
+        return new Promise(function (resolve) {
+            _this.getValue().then(function (val) {
+                var _config = new json_1.JSON();
+                if (!(val instanceof xml_1.XML)) {
+                    _config['tag'] = 'screen';
+                    _config['module'] = '';
+                    _config['window'] = '';
+                    _config['hwnd'] = '0';
+                    _config['wclient'] = '0';
+                    _config['left'] = '0';
+                    _config['top'] = '0';
+                    _config['width'] = '0';
+                    _config['height'] = '0';
+                }
+                else {
+                    _config = json_1.JSON.parse(val);
+                }
+                _config['wclient'] = (value ? '1' : '0');
+                _this.setValue(xml_1.XML.parseJSON(_config)).then(function () {
+                    resolve(_this);
+                });
+            });
+        });
+    };
+    return iSourceScreen;
+})();
+exports.iSourceScreen = iSourceScreen;
+},{"../../internal/item":54,"../../internal/util/json":56,"../../internal/util/logger":57,"../../internal/util/xml":60,"../../util/rectangle":74}],41:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var item_1 = require('../../internal/item');
+var version_1 = require('../../internal/util/version');
+var xml_1 = require('../../internal/util/xml');
+var json_1 = require('../../internal/util/json');
+var scene_1 = require('../scene');
+var logger_1 = require('../../internal/util/logger');
+/**
+ * ItemTypes is used to define the type of the current Source.
+ *
+ * Check `getType()` method of {@link #core/Source#getType Core/Source}
+ */
+(function (ItemTypes) {
+    ItemTypes[ItemTypes["UNDEFINED"] = 0] = "UNDEFINED";
+    ItemTypes[ItemTypes["FILE"] = 1] = "FILE";
+    ItemTypes[ItemTypes["LIVE"] = 2] = "LIVE";
+    ItemTypes[ItemTypes["TEXT"] = 3] = "TEXT";
+    ItemTypes[ItemTypes["BITMAP"] = 4] = "BITMAP";
+    ItemTypes[ItemTypes["SCREEN"] = 5] = "SCREEN";
+    ItemTypes[ItemTypes["FLASHFILE"] = 6] = "FLASHFILE";
+    ItemTypes[ItemTypes["GAMESOURCE"] = 7] = "GAMESOURCE";
+    ItemTypes[ItemTypes["HTML"] = 8] = "HTML";
+})(exports.ItemTypes || (exports.ItemTypes = {}));
+var ItemTypes = exports.ItemTypes;
+/**
+ * Used by Source and Item to implement methods that are used on both classes
+ * More info to be added soon.
+ */
+var iSource = (function () {
+    function iSource() {
+    }
+    iSource.prototype._updateId = function (id, sceneId) {
+        this._id = id;
+        this._sceneId = sceneId;
+    };
+    iSource.prototype.setName = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            _this._name = value;
+            if (version_1.versionCompare(version_1.getVersion())
+                .is
+                .lessThan(version_1.minVersion)) {
+                item_1.Item.set('prop:name', _this._name, _this._id).then(function () {
+                    resolve(_this);
+                });
+            }
+            else {
+                if (_this._isItemCall) {
+                    logger_1.Logger.warn('sourceWarning', 'setName', true);
+                    _this._checkPromise = item_1.Item.get('itemlist', _this._id);
+                }
+                else {
+                    _this._checkPromise = item_1.Item.wrapGet('itemlist', _this._srcId, _this._id, _this._updateId.bind(_this));
+                }
+                _this._checkPromise.then(function (itemlist) {
+                    var promiseArray = [];
+                    var itemsArray = itemlist.split(',');
+                    itemsArray.forEach(function (itemId) {
+                        promiseArray.push(new Promise(function (itemResolve) {
+                            item_1.Item.set('prop:name', _this._name, itemId).then(function () {
+                                itemResolve(true);
+                            });
+                            item_1.Item.wrapSet('prop:name', _this._name, _this._srcId, itemId, _this._updateId.bind(_this));
+                        }));
+                    });
+                    Promise.all(promiseArray).then(function () {
+                        resolve(_this);
+                    });
+                });
+            }
+        });
+    };
+    iSource.prototype.getName = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getName', true);
+                _this._checkPromise = item_1.Item.get('prop:name', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:name', _this._srcId, _this._id, _this._updateId.bind(_this).bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                _this._name = String(val);
+                resolve(val);
+            });
+        });
+    };
+    iSource.prototype.setCustomName = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            _this._cname = value;
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setCustomName', true);
+                item_1.Item.set('prop:cname', _this._cname, _this._id)
+                    .then(function () {
+                    resolve(_this);
+                });
+            }
+            else {
+                item_1.Item.wrapSet('prop:cname', _this._cname, _this._srcId, _this._id, _this._updateId.bind(_this))
+                    .then(function () {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    iSource.prototype.getCustomName = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getCustomName', true);
+                item_1.Item.get('prop:cname', _this._id)
+                    .then(function (val) {
+                    resolve(val);
+                });
+            }
+            else {
+                item_1.Item.wrapGet('prop:cname', _this._srcId, _this._id, _this._updateId.bind(_this))
+                    .then(function (val) {
+                    resolve(val);
+                });
+            }
+        });
+    };
+    iSource.prototype.getValue = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getValue', true);
+                _this._checkPromise = item_1.Item.get('prop:item', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:item', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                val = (val === 'null') ? '' : val;
+                if (val === '') {
+                    _this._value = '';
+                    resolve(val);
+                }
+                else {
+                    try {
+                        _this._value = xml_1.XML.parseJSON(json_1.JSON.parse(val));
+                        resolve(_this._value);
+                    }
+                    catch (e) {
+                        // value is not valid XML (it is a string instead)
+                        _this._value = val;
+                        resolve(val);
+                    }
+                }
+            });
+        });
+    };
+    iSource.prototype.setValue = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            var prevVal;
+            var val = (typeof value === 'string') ?
+                value : value.toString();
+            if (typeof value !== 'string') {
+                _this._value = json_1.JSON.parse(val);
+            }
+            else {
+                _this._value = val;
+            }
+            var typeCheck = _this.getValue().then(function (origVal) {
+                return new Promise(function (typeRes, typeRej) {
+                    if (String(origVal).indexOf('{33D9A762-90C8-11D0-BD43-00A0C911CE86}') !== -1 &&
+                        val.indexOf('{33D9A762-90C8-11D0-BD43-00A0C911CE86}') === -1 &&
+                        _this._type === ItemTypes.LIVE) {
+                        typeRej(Error('Value is not a valid Audio source'));
+                    }
+                    else {
+                        typeRes(true);
+                    }
+                });
+            });
+            typeCheck.then(function () {
+                if (_this._isItemCall) {
+                    logger_1.Logger.warn('sourceWarning', 'setValue', true);
+                    item_1.Item.set(String(_this._type) === '2' ? 'prop:item' : 'prop:srcitem', val, _this._id)
+                        .then(function () {
+                        resolve(_this);
+                    });
+                }
+                else {
+                    item_1.Item.wrapSet('prop:srcitem', val, _this._srcId, _this._id, _this._updateId.bind(_this))
+                        .then(function () {
+                        resolve(_this);
+                    });
+                }
+            });
+        });
+    };
+    iSource.prototype.getKeepLoaded = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getKeepLoaded', true);
+                _this._checkPromise = item_1.Item.get('prop:keeploaded', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:keeploaded', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                _this._keepLoaded = (val === '1');
+                resolve(_this._keepLoaded);
+            });
+        });
+    };
+    iSource.prototype.setKeepLoaded = function (value) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            _this._keepLoaded = value;
+            _this._globalsrc = value;
+            if (version_1.versionCompare(version_1.getVersion())
+                .is
+                .lessThan(version_1.globalsrcMinVersion)) {
+                item_1.Item.set('prop:globalsrc', (_this._globalsrc ? '1' : '0'), _this._id);
+            }
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setKeepLoaded', true);
+                item_1.Item.set('prop:keeploaded', (_this._keepLoaded ? '1' : '0'), _this._id)
+                    .then(function () {
+                    resolve(_this);
+                });
+            }
+            else {
+                item_1.Item.wrapSet('prop:keeploaded', (_this._keepLoaded ? '1' : '0'), _this._srcId, _this._id, _this._updateId.bind(_this))
+                    .then(function () {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    iSource.prototype.getId = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (_this._isItemCall) {
+                resolve(_this._id);
+            }
+            else {
+                if (version_1.versionCompare(version_1.getVersion()).is.lessThan(version_1.minVersion)) {
+                    reject(Error('Only available on versions above ' + version_1.minVersion));
+                }
+                else {
+                    item_1.Item.wrapGet('prop:srcid', _this._srcId, _this._id, _this._updateId.bind(_this))
+                        .then(function (srcid) {
+                        resolve(srcid);
+                    });
+                }
+            }
+        });
+    };
+    iSource.prototype.refresh = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                item_1.Item.set('refresh', '', _this._id).then(function () {
+                    resolve(_this);
+                });
+            }
+            else {
+                item_1.Item.wrapSet('refresh', '', _this._srcId, _this._id, _this._updateId.bind(_this)).then(function () {
+                    resolve(_this);
+                });
+            }
+        });
+    };
+    iSource.prototype.getItemList = function () {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (version_1.versionCompare(version_1.getVersion())
+                .is
+                .lessThan(version_1.minVersion)) {
+                scene_1.Scene.searchItemsById(_this._id).then(function (item) {
+                    var itemArray = [];
+                    itemArray.push(item);
+                    resolve(itemArray);
+                });
+            }
+            else {
+                if (_this._isItemCall) {
+                    _this._checkPromise = item_1.Item.get('itemlist', _this._id);
+                }
+                else {
+                    _this._checkPromise = item_1.Item.wrapGet('itemlist', _this._srcId, _this._id, _this._updateId.bind(_this));
+                }
+                _this._checkPromise.then(function (itemlist) {
+                    var promiseArray = [];
+                    var itemsArray = String(itemlist).split(',');
+                    itemsArray.forEach(function (itemId) {
+                        promiseArray.push(new Promise(function (itemResolve) {
+                            scene_1.Scene.searchItemsById(itemId).then(function (item) {
+                                itemResolve(item);
+                            }).catch(function () { return itemResolve(null); });
+                        }));
+                    });
+                    Promise.all(promiseArray).then(function (results) {
+                        resolve(results.filter(function (res) { return res !== null; }));
+                    });
+                });
+            }
+        });
+    };
+    iSource.prototype.getType = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                _this._checkPromise = item_1.Item.get('prop:type', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:type', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (val) {
+                _this._type = ItemTypes[ItemTypes[Number(val)]];
+                resolve(_this._type);
+            });
+        });
+    };
+    return iSource;
+})();
+exports.iSource = iSource;
+},{"../../internal/item":54,"../../internal/util/json":56,"../../internal/util/logger":57,"../../internal/util/version":59,"../../internal/util/xml":60,"../scene":23}],42:[function(require,module,exports){
+/// <reference path="../../../defs/es6-promise.d.ts" />
+var item_1 = require('../../internal/item');
+var io_1 = require('../../util/io');
+var logger_1 = require('../../internal/util/logger');
+var SourceVideoPlaylist = (function () {
+    function SourceVideoPlaylist() {
+    }
+    SourceVideoPlaylist.prototype._updateId = function (id, sceneId) {
+        this._id = id;
+        this._sceneId = sceneId;
+    };
+    SourceVideoPlaylist.prototype.getVideoNowPlaying = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getVideoNowPlaying', true);
+                _this._checkPromise = item_1.Item.get('prop:srcitem', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:srcitem', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (playlist) {
+                var _playlist = String(playlist).slice(0, playlist.indexOf('*'));
+                resolve(_playlist);
+            });
+        });
+    };
+    SourceVideoPlaylist.prototype.setVideoNowPlaying = function (value) {
+        var _this = this;
+        var file;
+        var _playlist;
+        return new Promise(function (resolve, reject) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'setVideoNowPlaying', true);
+                _this._checkPromise = item_1.Item.get('prop:FilePlaylist', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:FilePlaylist', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (playlist) {
+                _playlist = String(playlist).split('|');
+                for (var i = 0; i < _playlist.length; i++) {
+                    _playlist[i] = _playlist[i].slice(0, _playlist[i].indexOf('*'));
+                }
+                ;
+                return _playlist;
+            }).then(function (list) {
+                if (typeof value === 'string') {
+                    if (_playlist.indexOf(value) === -1) {
+                        reject(Error('File not found on Playlist.'));
+                    }
+                    else {
+                        var index = _playlist.indexOf(value);
+                        file = _playlist[index] + '*' + index;
+                        item_1.Item.set('prop:srcitem', file, _this._id)
+                            .then(function (fileplaylist) {
+                            resolve(_this);
+                        });
+                    }
+                }
+                else if (typeof value === 'number' && value <= _playlist.length) {
+                    file = (_playlist[value] + '*' + value);
+                    item_1.Item.set('prop:srcitem', file, _this._id)
+                        .then(function (fileplaylist) {
+                        resolve(this);
+                    });
+                }
+                else {
+                    reject(Error('Invalid parameter. Value can only be either filename string or its index equivalent in the VideoPlaylist files array'));
+                }
+                ;
+            });
+        });
+    };
+    ;
+    SourceVideoPlaylist.prototype.getVideoPlaylistSources = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (_this._isItemCall) {
+                logger_1.Logger.warn('sourceWarning', 'getVideoPlaylistSources', true);
+                _this._checkPromise = item_1.Item.get('prop:FilePlaylist', _this._id);
+            }
+            else {
+                _this._checkPromise = item_1.Item.wrapGet('prop:FilePlaylist', _this._srcId, _this._id, _this._updateId.bind(_this));
+            }
+            _this._checkPromise.then(function (playlist) {
+                var _playlist = String(playlist).split('|');
+                for (var i = 0; i < _playlist.length; i++) {
+                    _playlist[i] = _playlist[i].slice(0, _playlist[i].indexOf('*'));
+                }
+                ;
+                resolve(_playlist);
+            });
+        });
+    };
+    ;
+    SourceVideoPlaylist.prototype.setVideoPlaylistSources = function (fileItems) {
+        var _this = this;
+        if (this._isItemCall) {
+            logger_1.Logger.warn('sourceWarning', 'setVideoPlaylistSources', true);
+        }
+        var fileString;
+        var filePromises = fileItems.map(function (filename) {
+            return io_1.IO.getVideoDuration(filename);
+        });
+        return new Promise(function (resolve, reject) {
+            Promise.all(filePromises).then(function (duration) {
+                for (var i = 0; i < fileItems.length; i++) {
+                    if (fileString === undefined) {
+                        fileString = fileItems[i] + '*' + i + '*1*'
+                            + duration[i] + '*100*0*0*0*0*0|';
+                    }
+                    else {
+                        fileString += fileItems[i] + '*' + i + '*1*'
+                            + duration[i] + '*100*0*0*0*0*0';
+                        if (i + 1 < fileItems.length) {
+                            fileString += '|';
+                        }
+                        ;
+                    }
+                    ;
+                }
+                ;
+                if (_this._isItemCall) {
+                    item_1.Item.set('prop:srcitem', fileItems[0] + '*0', _this._id);
+                }
+                else {
+                    item_1.Item.wrapSet('prop:srcitem', fileItems[0] + '*0', _this._srcId, _this._id, _this._updateId.bind(_this));
+                }
+                return fileString;
+            }).then(function (fileString) {
+                item_1.Item.set('prop:FilePlaylist', fileString, _this._id)
+                    .then(function (fileplaylist) {
+                    resolve(_this);
+                });
+            });
+        });
+    };
+    ;
+    return SourceVideoPlaylist;
+})();
+exports.SourceVideoPlaylist = SourceVideoPlaylist;
+},{"../../internal/item":54,"../../internal/util/logger":57,"../../util/io":72}],43:[function(require,module,exports){
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
     function __() { this.constructor = d; }
     __.prototype = b.prototype;
     d.prototype = new __();
 };
-var media_1 = require('../items/media');
+var mixin_1 = require('../../internal/util/mixin');
+var source_1 = require('./source');
+var iplayback_1 = require('./iplayback');
+var iaudio_1 = require('./iaudio');
+var imedia_1 = require('./imedia');
+exports.MediaTypes = [
+    '.mp3', '.aac', '.cda', '.ogg', '.m4a', '.flac', '.wma',
+    '.aiff', '.aif', '.wav', '.mid', '.midi', '.rma', '.avi',
+    '.flv', '.mkv', '.mp4', '.mpg', '.wmv', '.3gp', '.3g2',
+    '.asf', '.f4v', '.mov', '.mpeg', '.vob', '.webm'
+];
 /**
- * > #### For Deprecation
- * This Class is deprecated and will be removed soon. Please use
- * {@link #core/MediaItem MediaItem} instead. This Class shares the same
- * methods with MediaItem.
+ * The MediaSource class represents the sources of the media items that
+ * has been added to the stage. A single source could have multiple items linked
+ * into it and any changes to the source would affect all items linked to it.
+ *
+ * Each item is represented by the MediaItem class.
+ * See: {@link #core/MediaItem Core/MediaItem}
+ *
+ * Inherits from: {@link #core/Source Core/Source}
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var xjs = require('xjs');
+ *
+ * xjs.Scene.getActiveScene().then(function(scene) {
+ *   scene.getSources().then(function(sources) {
+ *   for (var i in sources) {
+ *       if (sources[i] instanceof XJS.MediaSource) {
+ *         // Manipulate your media source here
+ *         sources[i].setSilenceDetectionEnabled(true);
+ *       }
+ *     }
+ *   })
+ * })
+ * ```
+ *
+ * All methods marked as *Chainable* resolve with the original `MediaSource`
+ * instance.
  */
 var MediaSource = (function (_super) {
     __extends(MediaSource, _super);
@@ -8100,9 +9609,10 @@ var MediaSource = (function (_super) {
         _super.apply(this, arguments);
     }
     return MediaSource;
-})(media_1.MediaItem);
+})(source_1.Source);
 exports.MediaSource = MediaSource;
-},{"../items/media":23}],34:[function(require,module,exports){
+mixin_1.applyMixins(MediaSource, [iplayback_1.SourcePlayback, iaudio_1.Audio, imedia_1.SourceMedia]);
+},{"../../internal/util/mixin":58,"./iaudio":30,"./imedia":38,"./iplayback":39,"./source":45}],44:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -8110,12 +9620,38 @@ var __extends = (this && this.__extends) || function (d, b) {
     __.prototype = b.prototype;
     d.prototype = new __();
 };
-var screen_1 = require('../items/screen');
+var source_1 = require('../source/source');
+var mixin_1 = require('../../internal/util/mixin');
+var iscreen_1 = require('./iscreen');
 /**
- * > #### For Deprecation
- * This Class is deprecated and will be removed soon. Please use
- * {@link #core/ScreenItem ScreenItem} instead. This Class shares the same
- * methods with ScreenItem.
+ * The ScreenSource class represents the sources of the screen device items that
+ * has been added to the stage. A single source could have multiple items linked
+ * into it and any changes to the source would affect all items linked to it.
+ *
+ * Each item is represented by the ScreenItem class.
+ * See: {@link #core/ScreenItem Core/ScreenItem}
+ *
+ * Inherits from: {@link #core/Source Core/Source}
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var xjs = require('xjs');
+ *
+ * xjs.Scene.getActiveScene().then(function(scene) {
+ *   scene.getSources().then(function(sources) {
+ *   for (var i in sources) {
+ *       if (sources[i] instanceof XJS.ScreenSource) {
+ *         // Manipulate your screen source here
+ *         sources[i].setSilenceDetectionEnabled(true);
+ *       }
+ *     }
+ *   })
+ * })
+ * ```
+ *
+ *  All methods marked as *Chainable* resolve with the original `ScreenSource`
+ *  instance.
  */
 var ScreenSource = (function (_super) {
     __extends(ScreenSource, _super);
@@ -8123,45 +9659,290 @@ var ScreenSource = (function (_super) {
         _super.apply(this, arguments);
     }
     return ScreenSource;
-})(screen_1.ScreenItem);
+})(source_1.Source);
 exports.ScreenSource = ScreenSource;
-},{"../items/screen":24}],35:[function(require,module,exports){
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    __.prototype = b.prototype;
-    d.prototype = new __();
-};
+mixin_1.applyMixins(ScreenSource, [iscreen_1.iSourceScreen]);
+},{"../../internal/util/mixin":58,"../source/source":45,"./iscreen":40}],45:[function(require,module,exports){
 /// <reference path="../../../defs/es6-promise.d.ts" />
-var item_1 = require('../items/item');
+var mixin_1 = require('../../internal/util/mixin');
+var app_1 = require('../../internal/app');
+var item_1 = require('../../internal/item');
+var version_1 = require('../../internal/util/version');
+var environment_1 = require('../environment');
+var scene_1 = require('../scene');
+var isource_1 = require('../source/isource');
 /**
- * > #### For Deprecation
- * This Class is deprecated and will be removed soon. Please use
- * {@link #core/Item Item} instead. This Class shares the same
- * methods with Item.
+ * A `Source` represents an object of an Item that is used on the stage.
+ * Manipulating Source specific properties would render changes to all
+ * items linked to that source.
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var xjs = require('xjs');
+ * var Scene = xjs.Scene
+ *
+ * xjs.ready()
+ *    .then(Scene.getById(1))
+ *    .then(function(scene) {
+ *    scene.getSources().then(function(sources) {
+ *    return sources[0].setCustomName('Custom Name');
+ *    })
+ * })
+ *```
+ *
+ * All methods marked as *Chainable* resolve with the original `Source` instance.
+ * This allows you to perform sequential operations correctly: *
+ * ```javascript
+ * var xjs = require('xjs');
+ * var Source = xjs.Source;
+ *
+ * xjs.ready()
+ *    .then(Source.getCurrentSource)
+ *    .then(function(source){
+ *     //Manipulate source here
+ *     return source.setName('New Name');
+ *  }).then(function(source){
+ *     return source.setKeepLoaded(true)
+ *  }).then(function(source){
+ *     // set more source properties here
+ *  })
+ * ```
  */
-var Source = (function (_super) {
-    __extends(Source, _super);
-    function Source() {
-        _super.apply(this, arguments);
+var Source = (function () {
+    function Source(props) {
+        props = props ? props : {};
+        this._name = props['name'];
+        this._cname = props['cname'];
+        this._id = props['id'];
+        this._srcId = props['srcid'];
+        this._sceneId = props['sceneId'];
+        this._value = props['value'];
+        this._keepLoaded = props['keeploaded'];
+        this._type = Number(props['type']);
+        this._xmlparams = props;
+        this._isItemCall = false;
     }
+    /**
+     * return: Promise<Source>
+     *
+     * Get the current source (when function is called by sources), or the source
+     * that was right-clicked to open the source properties window (when function is called
+     * from the source properties window)
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * xjs.Source.getCurrentSource().then(function(source) {
+     *   // This will fetch the current source (the plugin)
+     * }).catch(function(err) {
+     *   // Handle the error here. Errors would only occur
+     *   // if we try to execute this method on Extension plugins
+     * });
+     * ```
+     */
+    Source.getCurrentSource = function () {
+        return new Promise(function (resolve, reject) {
+            if (environment_1.Environment.isExtension()) {
+                reject(Error('Extensions do not have sources ' +
+                    'associated with them.'));
+            }
+            else if ((environment_1.Environment.isSourcePlugin() || environment_1.Environment.isSourceProps()) &&
+                version_1.versionCompare(version_1.getVersion())
+                    .is
+                    .greaterThan(version_1.minVersion)) {
+                Source.getItemList().then(function (items) {
+                    if (items.length > 0) {
+                        items[0].getSource().then(function (source) {
+                            resolve(source);
+                        });
+                    }
+                    else {
+                        reject(Error('Cannot get item list'));
+                    }
+                });
+            }
+            else if (environment_1.Environment.isSourcePlugin() || environment_1.Environment.isSourceProps()) {
+                scene_1.Scene.searchItemsById(item_1.Item.getBaseId()).then(function (item) {
+                    return item.getSource();
+                }).then(function (source) {
+                    resolve(source);
+                });
+            }
+        });
+    };
+    /**
+     * return: Promise<Item[]>
+     *
+     * Get the item List of the current Source.
+     * The item list is a list of items linked to a single Source.
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * xjs.Source.getItemList()
+     * .then(function(items) {
+     *   // This will fetch the item list of the current Source
+     *   for (var i = 0 ; i < items.length ; i++) {
+     *     // Manipulate each item here
+     *   }
+     * });
+     * ```
+     *
+     * This is just the shorter way of getting items that are linked to a single
+     * source. See the long version below:
+     * ```javascript
+     * xjs.Source.getCurrentSource()
+     * .then(source.getItemList)
+     * .then(function(items) {
+     * // Manipulate the items here
+     * })
+     * ```
+     */
+    Source.getItemList = function () {
+        return new Promise(function (resolve, reject) {
+            if (environment_1.Environment.isExtension()) {
+                reject(Error('Extensions do not have default items associated with them.'));
+            }
+            else if (version_1.versionCompare(version_1.getVersion())
+                .is
+                .lessThan(version_1.minVersion)) {
+                scene_1.Scene.searchItemsById(item_1.Item.getBaseId()).then(function (item) {
+                    var itemArray = [];
+                    itemArray.push(item);
+                    resolve(itemArray);
+                });
+            }
+            else if (environment_1.Environment.isSourcePlugin() || environment_1.Environment.isSourceProps()) {
+                item_1.Item.get('itemlist').then(function (itemlist) {
+                    var promiseArray = [];
+                    var itemsArray = itemlist.split(',');
+                    itemsArray.forEach(function (itemId) {
+                        promiseArray.push(new Promise(function (itemResolve) {
+                            scene_1.Scene.searchItemsById(itemId).then(function (item) {
+                                itemResolve(item);
+                            }).catch(function () { return itemResolve(null); });
+                        }));
+                    });
+                    Promise.all(promiseArray).then(function (results) {
+                        resolve(results.filter(function (res) { return res !== null; }));
+                    });
+                });
+            }
+        });
+    };
+    /**
+     * return: Promise<Source[]>
+     *
+     * Get all unique Source from every scene.
+     * Total number of Sources returned may be less than total number of items on
+     * all the scenes due to `Linked` items only having a single Source.
+     *
+     * #### Usage
+     * ```javascript
+     * xjs.Source.getAllSources().then(function(sources) {
+     *   for(var i = 0 ; i < sources.length ; i++) {
+     *      if(sources[i] instanceof xjs.HtmlSource) {
+     *        // Manipulate HTML Source here
+     *      }
+     *    }
+     * })
+     * ```
+     */
+    Source.getAllSources = function () {
+        return new Promise(function (resolve, reject) {
+            var allJson = [];
+            var allSrc = [];
+            var uniqueObj = {};
+            var uniqueSrc = [];
+            var promiseArray = [];
+            app_1.App.getAsList('presetconfig').then(function (jsonArr) {
+                for (var i = 0; i < jsonArr.length - 1; i++) {
+                    allJson = allJson.concat(jsonArr[i].children);
+                }
+                var sourcePromise = function (srcid) { return new Promise(function (sourceResolve) {
+                    scene_1.Scene.searchSourcesById(srcid).then(function (result) {
+                        allSrc = allSrc.concat(result);
+                        sourceResolve(result);
+                    }).catch(function (err) {
+                        sourceResolve(null);
+                    });
+                }); };
+                for (var i = 0; i < allJson.length; i++) {
+                    if (typeof allJson[i] !== 'undefined') {
+                        promiseArray.push(sourcePromise(allJson[i]['srcid']));
+                    }
+                }
+                Promise.all(promiseArray).then(function (results) {
+                    for (var h = 0; h < allSrc.length; h++) {
+                        if (allSrc[h] !== null) {
+                            for (var key in allSrc[h]) {
+                                if (key === '_srcId') {
+                                    uniqueObj[allSrc[h][key]] = allSrc[h];
+                                }
+                            }
+                        }
+                    }
+                    for (var j in uniqueObj) {
+                        if (uniqueObj.hasOwnProperty(j)) {
+                            uniqueSrc.push(uniqueObj[j]);
+                        }
+                    }
+                    resolve(uniqueSrc);
+                });
+            }).catch(function (err) {
+                reject(err);
+            });
+        });
+    };
     return Source;
-})(item_1.Item);
+})();
 exports.Source = Source;
-},{"../items/item":21}],36:[function(require,module,exports){
-/// <reference path="../../../defs/es6-promise.d.ts" />
+mixin_1.applyMixins(Source, [isource_1.iSource]);
+},{"../../internal/app":49,"../../internal/item":54,"../../internal/util/mixin":58,"../../internal/util/version":59,"../environment":4,"../scene":23,"../source/isource":41}],46:[function(require,module,exports){
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
     function __() { this.constructor = d; }
     __.prototype = b.prototype;
     d.prototype = new __();
 };
-var videoplaylist_1 = require('../items/videoplaylist');
+/// <reference path="../../../defs/es6-promise.d.ts" />
+///
+var mixin_1 = require('../../internal/util/mixin');
+var source_1 = require('./source');
+var iconfig_1 = require('./iconfig');
+var ivideoplaylist_1 = require('./ivideoplaylist');
+var iplayback_1 = require('./iplayback');
+var iaudio_1 = require('./iaudio');
 /**
- * > #### For Deprecation
- * This Class is deprecated and will be removed soon. Please use
- * {@link #core/VideoPlaylistItem VideoPlaylistItem} instead. This Class shares
- * the same methods with VideoPlaylistItem.
+ * The VideoPlaylistSource class represents the sources of the videoplaylist items that
+ * has been added to the stage. A single source could have multiple items linked
+ * into it and any changes to the source would affect all items linked to it.
+ *
+ * Each item is represented by the VideoPlaylistItem class.
+ * See: {@link #core/VideoPlaylistItem Core/VideoPlaylistItem}
+ *
+ * Inherits from: {@link #core/Source Core/Source}
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var xjs = require('xjs');
+ *
+ * xjs.Scene.getActiveScene().then(function(scene) {
+ *   scene.getSources().then(function(sources) {
+ *   for (var i in sources) {
+ *       if (sources[i] instanceof XJS.VideoPlaylistSource) {
+ *         // Manipulate your videoplaylist source here
+ *         sources[i].setSilenceDetectionEnabled(true);
+ *       }
+ *     }
+ *   })
+ * })
+ * ```
+ *
+ *  All methods marked as *Chainable* resolve with the original
+ *  `VideoPlaylistSource` instance.
  */
 var VideoPlaylistSource = (function (_super) {
     __extends(VideoPlaylistSource, _super);
@@ -8169,26 +9950,195 @@ var VideoPlaylistSource = (function (_super) {
         _super.apply(this, arguments);
     }
     return VideoPlaylistSource;
-})(videoplaylist_1.VideoPlaylistItem);
+})(source_1.Source);
 exports.VideoPlaylistSource = VideoPlaylistSource;
-},{"../items/videoplaylist":25}],37:[function(require,module,exports){
+mixin_1.applyMixins(VideoPlaylistSource, [iconfig_1.SourceConfigurable, ivideoplaylist_1.SourceVideoPlaylist, iplayback_1.SourcePlayback, iaudio_1.Audio]);
+},{"../../internal/util/mixin":58,"./iaudio":30,"./iconfig":33,"./iplayback":39,"./ivideoplaylist":42,"./source":45}],47:[function(require,module,exports){
+var app_1 = require('../internal/app');
+/**
+ * The StreamInfo class provides methods to monitor the current active streams
+ *  activity and other details.
+ *
+ * This can be used together with {@link #core/Output Output Class} and check
+ * the details of the currently live outputs.
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var xjs = require('xjs');
+ *
+ * xjs.ready()
+ * .then(xjs.StreamInfo.getActiveStreamChannels)
+ * .then(function(channels) {
+ *   var stream = []
+ *   channels.forEach(function(channel){
+ *     channel.getName()
+ *     .then(name => {
+ *       if(name.includes('Twitch')) {
+ *         stream.push(channel)
+ *       }
+ *     })
+ *   })
+ *   return stream
+ * }).then(function(stream) {
+ *   // Get any stream information you need here
+ *   return stream[0].getStreamRenderedFrames()
+ * })
+ * ```
+ */
+var StreamInfo = (function () {
+    /** StreamInfo constructor (only used internally) */
+    function StreamInfo(props) {
+        this._name = props.name;
+        this._stat = props.stat;
+        this._channel = props.channel;
+    }
+    /**
+     *  return: Promise<StreamInfo[]>
+     *
+     *  Gets the list of currently active channels.
+     */
+    StreamInfo.getActiveStreamChannels = function () {
+        return new Promise(function (resolve) {
+            app_1.App.getAsList('recstat').then(function (activeStreams) {
+                if (activeStreams.length === 0) {
+                    resolve([]);
+                }
+                else {
+                    var channels = [];
+                    for (var i = 0; i < activeStreams.length; ++i) {
+                        channels.push(new StreamInfo({
+                            name: activeStreams[i]['name'],
+                            stat: activeStreams[i].children.filter(function (child) {
+                                return child.tag.toLowerCase() === 'stat';
+                            })[0],
+                            channel: activeStreams[i].children.filter(function (child) {
+                                return child.tag.toLowerCase() === 'channel';
+                            })[0]
+                        }));
+                    }
+                    resolve(channels);
+                }
+            });
+        });
+    };
+    /**
+     *  return: Promise<string>
+     *
+     *  Gets the name of the channel.
+     */
+    StreamInfo.prototype.getName = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            resolve(_this._name);
+        });
+    };
+    /**
+     * return: Promise<number>
+     *
+     * Gets the number of frames dropped
+     */
+    StreamInfo.prototype.getStreamDrops = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            app_1.App.get('streamdrops:' + _this._name).then(function (val) {
+                var drops = val.split(','), dropped = Number(drops[0]) || 0;
+                resolve(dropped);
+            });
+        });
+    };
+    /**
+     * return: Promise<number>
+     *
+     * Gets the number of GOP frames dropped
+     */
+    StreamInfo.prototype.getGOPDrops = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var usage;
+            app_1.App.getGlobalProperty('bandwidthusage-all').then(function (result) {
+                usage = JSON.parse(result);
+                for (var i = 0; i < usage.length; i++) {
+                    if (usage[i].ChannelName === _this._name) {
+                        resolve(usage[i].Dropped);
+                    }
+                }
+            });
+        });
+    };
+    /**
+     * return: Promise<number>
+     *
+     * Gets the number of frames rendered
+     */
+    StreamInfo.prototype.getStreamRenderedFrames = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            app_1.App.get('streamdrops:' + _this._name).then(function (val) {
+                var drops = val.split(','), rendered = Number(drops[1]) || 0;
+                resolve(rendered);
+            });
+        });
+    };
+    /**
+     * return: Promise<number>
+     *
+     * Gets the current duration of the stream in microseconds
+     */
+    StreamInfo.prototype.getStreamTime = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            app_1.App.get('streamtime:' + _this._name).then(function (val) {
+                var duration = Number(val) / 10;
+                resolve(duration);
+            });
+        });
+    };
+    /**
+     * return: Promise<number>
+     *
+     * Gets the current bandwidth usage of the stream
+     */
+    StreamInfo.prototype.getBandwidthUsage = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var usage;
+            if (_this._name !== 'Local Recording') {
+                app_1.App.getGlobalProperty('bandwidthusage-all').then(function (result) {
+                    usage = JSON.parse(result);
+                    for (var i = 0; i < usage.length; i++) {
+                        if (usage[i].ChannelName === _this._name) {
+                            resolve(usage[i].AvgBitrate);
+                        }
+                    }
+                });
+            }
+            else {
+                resolve(0);
+            }
+        });
+    };
+    return StreamInfo;
+})();
+exports.StreamInfo = StreamInfo;
+},{"../internal/app":49}],48:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var app_1 = require('../internal/app');
 /**
  * The Transition class represents a preset transition within XSplit Broadcaster.
  * This may be used to set the application's transition scheme when switching scenes,
- * or to set an individual source's transition when its visibility changes.
+ * or to set an individual item's transition when its visibility changes.
  *
  * Simply use one of the available Transition objects such as Transition.FAN or
  * Transition.COLLAPSE as the parameter to the `setTransition()` method of an
- * App instance, or a valid Source instance that supports transitions (this
- * includes {@link #core/CameraSource Core/CameraSource},
- * {@link #core/CameraSource Core/FlashSource},
- * {@link #core/CameraSource Core/GameSource},
- * {@link #core/GameSource Core/HtmlSource},
- * {@link #core/CameraSource Core/ImageSource},
- * {@link #core/GameSource Core/MediaSource}, and
- * {@link #core/HtmlSource Core/ScreenSource}.)
+ * App instance, or a valid Item instance that supports transitions (this
+ * includes {@link #core/CameraItem Core/CameraItem},
+ * {@link #core/FlashItem Core/FlashItem},
+ * {@link #core/GameItem Core/GameItem},
+ * {@link #core/HtmlItem Core/HtmlItem},
+ * {@link #core/ImageItem Core/ImageItem},
+ * {@link #core/MediaItem Core/MediaItem}, and
+ * {@link #core/ScreenItem Core/ScreenItem}.)
  *
  * For scene transitions, you can also use custom stinger transitions,
  * which are exposed through the static method Transition.getSceneTransitions
@@ -8218,6 +10168,10 @@ var Transition = (function () {
                 }
                 this._key = fileName;
             }
+            this._value = key;
+        }
+        else if (typeof setValue !== null) {
+            this._key = setValue; // retain key so that NONE is readable
             this._value = key;
         }
         else {
@@ -8259,26 +10213,29 @@ var Transition = (function () {
     Transition.getSceneTransitions = function () {
         return new Promise(function (resolve) {
             var transitions = [];
-            var transitionString = app_1.App.getGlobalProperty('transitions');
-            try {
-                if (transitionString !== '') {
-                    var transitionArray = JSON.parse(transitionString);
-                    for (var i = transitionArray.length - 1; i >= 0; i--) {
-                        var transitionObject = transitionArray[i];
-                        if (transitionObject.hasOwnProperty('Id') &&
-                            transitionObject.hasOwnProperty('Name')) {
-                            transitions.push(new Transition(transitionObject['Id'], transitionObject['Name']));
+            var transitionString;
+            app_1.App.getGlobalProperty('transitions').then(function (result) {
+                transitionString = result;
+                try {
+                    if (transitionString !== '') {
+                        var transitionArray = JSON.parse(transitionString);
+                        for (var i = transitionArray.length - 1; i >= 0; i--) {
+                            var transitionObject = transitionArray[i];
+                            if (transitionObject.hasOwnProperty('Id') &&
+                                transitionObject.hasOwnProperty('Name')) {
+                                transitions.push(new Transition(transitionObject['Id'], transitionObject['Name']));
+                            }
                         }
+                        resolve(transitions);
                     }
-                    resolve(transitions);
+                    else {
+                        resolve(transitions);
+                    }
                 }
-                else {
-                    resolve(transitions);
+                catch (e) {
+                    throw new Error('Error retrieving available transitions');
                 }
-            }
-            catch (e) {
-                throw new Error('Error retrieving available transitions');
-            }
+            });
         });
     };
     Transition._transitionMap = {
@@ -8312,7 +10269,7 @@ var Transition = (function () {
     return Transition;
 })();
 exports.Transition = Transition;
-},{"../internal/app":38}],38:[function(require,module,exports){
+},{"../internal/app":49}],49:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var internal_1 = require('./internal');
 var json_1 = require('./util/json');
@@ -8354,17 +10311,26 @@ var App = (function () {
     };
     /** Get the value of the given global property */
     App.getGlobalProperty = function (name) {
-        return internal_1.exec('GetGlobalProperty', name);
+        return new Promise(function (resolve) {
+            internal_1.exec('GetGlobalProperty', name).then(function (result) {
+                resolve(result);
+            });
+        });
     };
     /** Calls a DLL function synchronously */
     App.callDll = function (func) {
+        var _this = this;
         var arg = [];
         for (var _i = 1; _i < arguments.length; _i++) {
             arg[_i - 1] = arguments[_i];
         }
         var args = [].slice.call(arguments);
-        args.unshift('CallDll');
-        return internal_1.exec.apply(this, args);
+        return new Promise(function (resolve) {
+            args.unshift('CallDll');
+            internal_1.exec.apply(_this, args).then(function (result) {
+                resolve(result);
+            });
+        });
     };
     /** Calls an application method asynchronously */
     App.callFunc = function (func, arg) {
@@ -8392,7 +10358,186 @@ var App = (function () {
     return App;
 })();
 exports.App = App;
-},{"./internal":41,"./util/json":43}],39:[function(require,module,exports){
+},{"./internal":53,"./util/json":56}],50:[function(require,module,exports){
+var internal_1 = require('./internal');
+var window_1 = require('../util/window');
+var remote_1 = require('./remote');
+/**
+ * Usage:
+ *
+ * ```
+ * EventManager.subscribe('StreamStart', callback);
+ * ```
+ *
+ * OR
+ *
+ * ```
+ * EventManager.subscribe(['StreamStart', 'StreamEnd'], callback);
+ * ```
+ */
+var EventManager = (function () {
+    function EventManager() {
+    }
+    EventManager.subscribe = function (event, _cb, id) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            event = event instanceof Array ? event : [event];
+            if (remote_1.Remote.remoteType === 'remote') {
+                var message = {
+                    event: event,
+                    id: id,
+                    type: 'event-manager'
+                };
+                event.forEach(function (_event) {
+                    if (EventManager._remoteHandlers[_event] === undefined) {
+                        EventManager._remoteHandlers[_event] = [];
+                    }
+                    if (_event === 'OnSceneAddByUser') {
+                        internal_1.exec('AppSubscribeEvents');
+                    }
+                    else if (_event.startsWith('itempropchange_')) {
+                        var itemID = _event.split('_')[1];
+                        internal_1.exec('ItemSubscribeEvents', itemID);
+                    }
+                    EventManager._remoteHandlers[_event].push(_cb);
+                });
+                remote_1.Remote.sendMessage(encodeURIComponent(JSON.stringify(message)));
+            }
+            else if (remote_1.Remote.remoteType === 'proxy') {
+                event.forEach(function (_event) {
+                    if (EventManager._proxyHandlers[_event] === undefined) {
+                        EventManager._proxyHandlers[_event] = [];
+                    }
+                    if (_event === 'OnSceneAddByUser') {
+                        internal_1.exec('AppSubscribeEvents');
+                    }
+                    else if (_event.startsWith('itempropchange_')) {
+                        var itemID = _event.split('_')[1];
+                        internal_1.exec('ItemSubscribeEvents', itemID);
+                    }
+                    EventManager._proxyHandlers[_event].push(_cb);
+                });
+            }
+            else {
+                if (event instanceof Array) {
+                    event.forEach(function (_event) {
+                        if (EventManager.callbacks[_event] === undefined) {
+                            EventManager.callbacks[_event] = [];
+                        }
+                        if (_event === 'OnSceneAddByUser') {
+                            internal_1.exec('AppSubscribeEvents');
+                        }
+                        else if (_event.startsWith('itempropchange_')) {
+                            var itemID = _event.split('_')[1];
+                            internal_1.exec('ItemSubscribeEvents', itemID);
+                        }
+                        EventManager.callbacks[_event].push(_cb);
+                    });
+                }
+                resolve(_this);
+            }
+        });
+    };
+    EventManager._setCallback = function (message) {
+        return new Promise(function (resolve) {
+            if (EventManager._proxyHandlers[message[0]] === undefined) {
+                EventManager._proxyHandlers[message[0]] = [];
+            }
+            resolve(EventManager._proxyHandlers[message[0]].push(message[1]));
+        });
+    };
+    EventManager._finalCallback = function (message) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var result = JSON.parse(decodeURIComponent(message));
+            if (EventManager._remoteHandlers[result['event']] !== undefined) {
+                result['result']['id'] = result['id'];
+                for (var _i = 0, _a = EventManager._remoteHandlers[result['event']]; _i < _a.length; _i++) {
+                    var handler = _a[_i];
+                    handler.apply(_this, [result['result']]);
+                }
+            }
+        });
+    };
+    EventManager.callbacks = {};
+    EventManager._remoteHandlers = {};
+    EventManager._proxyHandlers = {};
+    return EventManager;
+})();
+exports.EventManager = EventManager;
+window_1.default.OnMetersUpdate = function (evt) { };
+var oldSetEvent = window_1.default.SetEvent;
+window_1.default.SetEvent = function (args) {
+    var settings = [];
+    settings = args.split('&');
+    var settingsObj = {};
+    settings.map(function (el) {
+        var _split = el.split('=');
+        settingsObj[_split[0]] = _split[1];
+    });
+    if (remote_1.Remote.remoteType === 'proxy') {
+        if (EventManager._proxyHandlers[settingsObj['event']] === undefined)
+            return;
+        EventManager._proxyHandlers[settingsObj['event']].map(function (_cb) {
+            _cb(settingsObj);
+        });
+    }
+    else {
+        if (EventManager.callbacks[settingsObj['event']] === undefined)
+            return;
+        EventManager.callbacks[settingsObj['event']].map(function (_cb) {
+            _cb(settingsObj);
+        });
+    }
+    if (typeof oldSetEvent === 'function') {
+        oldSetEvent(args);
+    }
+};
+var oldAppOnEvent = window_1.default.AppOnEvent;
+window_1.default.AppOnEvent = function (event) {
+    if (remote_1.Remote.remoteType === 'proxy') {
+        if (EventManager._proxyHandlers[event] === undefined)
+            return;
+        EventManager._proxyHandlers[event].map(function (_cb) {
+            _cb({ event: event });
+        });
+    }
+    else {
+        if (EventManager.callbacks[event] === undefined)
+            return;
+        EventManager.callbacks[event].map(function (_cb) {
+            _cb({ event: event });
+        });
+    }
+    if (typeof oldAppOnEvent === 'function') {
+        oldAppOnEvent(event);
+    }
+};
+var oldOnEvent = window_1.default.OnEvent;
+window_1.default.OnEvent = function (event, item) {
+    var eventArgs = [];
+    for (var _i = 2; _i < arguments.length; _i++) {
+        eventArgs[_i - 2] = arguments[_i];
+    }
+    if (remote_1.Remote.remoteType === 'proxy') {
+        if (EventManager._proxyHandlers[event + '_' + item] === undefined)
+            return;
+        EventManager._proxyHandlers[event + '_' + item].map(function (_cb) {
+            _cb.apply(void 0, eventArgs);
+        });
+    }
+    else {
+        if (EventManager.callbacks[event + '_' + item] === undefined)
+            return;
+        EventManager.callbacks[event + '_' + item].map(function (_cb) {
+            _cb.apply(void 0, eventArgs);
+        });
+    }
+    if (typeof oldOnEvent === 'function') {
+        oldOnEvent(event);
+    }
+};
+},{"../util/window":75,"./internal":53,"./remote":55}],51:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var Global = (function () {
     function Global() {
@@ -8414,7 +10559,7 @@ var Global = (function () {
     return Global;
 })();
 exports.Global = Global;
-},{}],40:[function(require,module,exports){
+},{}],52:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var environment_1 = require('../core/environment');
 var item_1 = require('./item');
@@ -8498,7 +10643,7 @@ function readMetaConfigUrl() {
 }
 function getCurrentSourceId() {
     return new Promise(function (resolve) {
-        if (environment_1.Environment.isSourceConfig() ||
+        if (environment_1.Environment.isSourceProps() ||
             (environment_1.Environment.isSourcePlugin() &&
                 version_1.versionCompare(version_1.getVersion())
                     .is
@@ -8507,7 +10652,7 @@ function getCurrentSourceId() {
             internal_1.exec('GetLocalPropertyAsync', 'prop:id', function (result) {
                 var id = result;
                 item_1.Item.setBaseId(id);
-                if (environment_1.Environment.isSourcePlugin() || environment_1.Environment.isSourceConfig()) {
+                if (environment_1.Environment.isSourcePlugin() || environment_1.Environment.isSourceProps()) {
                     item_1.Item.lockSourceSlot(id);
                 }
                 resolve();
@@ -8520,9 +10665,13 @@ function getCurrentSourceId() {
 }
 function informWhenConfigLoaded() {
     return new Promise(function (resolve) {
-        if (environment_1.Environment.isSourceConfig()) {
+        if (environment_1.Environment.isSourceProps()) {
             window.addEventListener('load', function () {
-                config_1.SourcePropsWindow.getInstance().emit('config-load');
+                try {
+                    config_1.SourcePropsWindow.getInstance().emit('config-load');
+                }
+                catch (e) {
+                }
                 resolve();
             });
         }
@@ -8541,70 +10690,155 @@ function init() {
         }));
     });
 }
-init();
-},{"../core/environment":5,"../window/config":61,"./global":39,"./internal":41,"./item":42,"./util/version":45}],41:[function(require,module,exports){
+exports.default = init;
+},{"../core/environment":4,"../window/config":76,"./global":51,"./internal":53,"./item":54,"./util/version":59}],53:[function(require,module,exports){
 /// <reference path="../../defs/window.d.ts" />
+var remote_1 = require('./remote');
+var window_1 = require('../util/window');
 exports.DEBUG = false;
 var _callbacks = {};
+var _proxyCallbacks = {};
+var _remoteCallbacks = {};
+var counter = 0;
 /**
 * Executes an external function
 */
 function exec(funcName) {
+    var _this = this;
     var args = [];
     for (var _i = 1; _i < arguments.length; _i++) {
         args[_i - 1] = arguments[_i];
     }
-    var callback = null, ret = false;
-    if (args.length > 0) {
-        callback = args[args.length - 1];
-        if (callback instanceof Function) {
-            args.pop();
+    return new Promise(function (resolve, reject) {
+        var callback = null;
+        var ret = false;
+        if (args.length > 0) {
+            callback = args[args.length - 1];
+            if (callback instanceof Function) {
+                args.pop();
+            }
+            else {
+                callback = null;
+            }
+        }
+        if (exports.DEBUG) {
+            console.log([
+                'internal.exec("', funcName, '") ', JSON.stringify(args)
+            ].join(' '));
+        }
+        // For Remote, parse message and send to proxy
+        if (remote_1.Remote.remoteType === 'remote') {
+            counter++;
+            var message = {};
+            if (args.length >= 1) {
+                message = {
+                    funcName: funcName,
+                    args: args,
+                    asyncId: counter,
+                    type: 'exec'
+                };
+            }
+            else {
+                message = {
+                    funcName: funcName,
+                    asyncId: counter,
+                    type: 'exec'
+                };
+            }
+            remote_1.Remote.sendMessage(encodeURIComponent(JSON.stringify(message)));
+        }
+        if (window_1.default.external &&
+            window_1.default.external[funcName] &&
+            window_1.default.external[funcName] instanceof Function) {
+            ret = window_1.default.external[funcName].apply(_this, args);
+        }
+        // register callback if present
+        if (callback !== null) {
+            if (remote_1.Remote.remoteType === 'remote') {
+                _remoteCallbacks[counter] = callback;
+            }
+            else if (remote_1.Remote.remoteType === 'proxy') {
+                _proxyCallbacks[ret] = callback;
+            }
+            else {
+                _callbacks[ret] = callback;
+            }
         }
         else {
-            callback = null;
+            if (remote_1.Remote.remoteType === 'remote') {
+                _remoteCallbacks[counter] = function (result) {
+                    resolve(result);
+                };
+            }
         }
-    }
-    if (exports.DEBUG) {
-        console.log([
-            'internal.exec("', funcName, '") ', JSON.stringify(args)
-        ].join(' '));
-    }
-    if (window.external &&
-        window.external[funcName] &&
-        window.external[funcName] instanceof Function) {
-        ret = window.external[funcName].apply(this, args);
-    }
-    // register callback if present
-    if (callback !== null) {
-        _callbacks[ret] = callback;
-    }
-    return ret;
+        // Sync calls end here for proxy and local
+        if (remote_1.Remote.remoteType === 'proxy' && typeof (ret) !== 'number') {
+            if (_proxyCallbacks[ret] !== undefined) {
+                resolve(_proxyCallbacks[ret].call(_this, decodeURIComponent(ret)));
+            }
+        }
+        else if (remote_1.Remote.remoteType === 'local') {
+            resolve(ret);
+        }
+    });
 }
 exports.exec = exec;
-window.OnAsyncCallback = function (asyncID, result) {
-    var callback = _callbacks[asyncID];
-    if (callback instanceof Function) {
-        callback.call(this, decodeURIComponent(result));
+// Only used by remote to use saved callback
+function finalCallback(message) {
+    var _this = this;
+    return new Promise(function (resolve) {
+        var result = JSON.parse(message);
+        if (typeof (result['asyncId']) === 'number'
+            && _remoteCallbacks[result['asyncId']] !== undefined) {
+            _remoteCallbacks[result['asyncId']].apply(_this, [result['result']]);
+        }
+        else {
+            resolve(result['result']);
+        }
+    });
+}
+exports.finalCallback = finalCallback;
+var asyncCallback = window_1.default.OnAsyncCallback;
+window_1.default.OnAsyncCallback = function (asyncID, result) {
+    // Used by proxy to return Async calls
+    if (remote_1.Remote.remoteType === 'proxy') {
+        var callback = _proxyCallbacks[asyncID];
+        if (callback instanceof Function) {
+            callback.call(this, decodeURIComponent(result));
+        }
+    }
+    else {
+        var callback = _callbacks[asyncID];
+        if (callback instanceof Function) {
+            callback.call(this, decodeURIComponent(result));
+        }
+    }
+    if (typeof asyncCallback === 'function') {
+        asyncCallback(asyncID, result);
     }
 };
-},{}],42:[function(require,module,exports){
+},{"../util/window":75,"./remote":55}],54:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var internal_1 = require('./internal');
 var environment_1 = require('../core/environment');
+var app_1 = require('../internal/app');
 var version_1 = require('./util/version');
 var Item = (function () {
     function Item() {
     }
     /** Prepare an item for manipulation */
-    Item.attach = function (itemID) {
-        var slot = Item.itemSlotMap.indexOf(itemID);
-        if (slot === -1) {
-            slot = ++Item.lastSlot % Item.MAX_SLOTS;
-            if (Item.islockedSourceSlot && slot === 0) {
-                ++slot; // source cannot attach to first slot
+    Item.attach = function (itemID, callBack) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var slot = Item.itemSlotMap.indexOf(itemID);
+            if (slot === -1) {
+                slot = ++Item.lastSlot % Item.MAX_SLOTS;
+                if (Item.islockedSourceSlot && slot === 0) {
+                    ++slot; // source cannot attach to first slot
+                }
+                Item.lastSlot = slot;
+                Item.itemSlotMap[slot] = itemID;
             }
-            Item.lastSlot = slot;
-            Item.itemSlotMap[slot] = itemID;
             if (!environment_1.Environment.isSourcePlugin()) {
                 internal_1.exec('SearchVideoItem' +
                     (String(slot) === '0' ? '' : (slot + 1)), itemID);
@@ -8621,8 +10855,13 @@ var Item = (function () {
                         (String(slot) === '0' ? '' : (slot + 1)), itemID);
                 }
             }
-        }
-        return slot;
+            if (callBack) {
+                callBack.call(_this, slot);
+            }
+            else {
+                resolve(slot);
+            }
+        });
     };
     /** used for source plugins. lock an id to slot 0 */
     Item.lockSourceSlot = function (itemID) {
@@ -8635,49 +10874,246 @@ var Item = (function () {
             Item.itemSlotMap[0] = '';
         }
     };
+    /**
+     * Helper function to check if the supplied item id still exist.
+     */
+    Item.wrapGet = function (name, srcId, id, updateId) {
+        return new Promise(function (resolve) {
+            if (version_1.versionCompare(version_1.getVersion())
+                .is
+                .lessThan(version_1.minVersion)) {
+                Item.get(name, id).then(function (val) {
+                    resolve(val);
+                });
+            }
+            else {
+                Item.get('itemlist', id).then(function (itemlist) {
+                    return new Promise(function (resolveInner) {
+                        var itemsArray = itemlist.split(',');
+                        var secondJsonArr = [];
+                        if ((itemsArray.indexOf(id) > -1) && (itemsArray.length > 0) && (itemsArray[0] !== 'null')) {
+                            resolveInner(itemsArray[0]);
+                        }
+                        else {
+                            var idMatch, sceneMatch;
+                            app_1.App.getAsList('presetconfig')
+                                .then(function (jsonArr) {
+                                for (var i = 0; i < jsonArr.length; i++) {
+                                    if (jsonArr[i].children !== undefined) {
+                                        for (var j = 0; j < jsonArr[i].children.length; j++) {
+                                            if (jsonArr[i].children[j]['srcid'] === srcId) {
+                                                sceneMatch = i;
+                                                idMatch = jsonArr[i].children[j]['id'];
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if (idMatch !== undefined) {
+                                        break;
+                                    }
+                                }
+                                if (idMatch !== undefined) {
+                                    return new Promise(function (previewResolve) {
+                                        previewResolve('');
+                                    });
+                                }
+                                else {
+                                    return new Promise(function (previewResolve, previewReject) {
+                                        app_1.App.getAsList('presetconfig:i12')
+                                            .then(function (previewJSONArr) {
+                                            var previewMatch = '';
+                                            for (var k = 0; k < previewJSONArr.length; ++k) {
+                                                if (previewJSONArr[k]['srcid'] === srcId) {
+                                                    previewMatch = previewJSONArr[k]['id'];
+                                                    break;
+                                                }
+                                            }
+                                            previewResolve(previewMatch);
+                                        }).catch(function (e) {
+                                            previewReject(e);
+                                        });
+                                    });
+                                }
+                            }).then(function (previewId) {
+                                if (previewId !== '') {
+                                    idMatch = previewId;
+                                    sceneMatch = 'i12';
+                                }
+                                if (idMatch !== undefined) {
+                                    updateId(idMatch, sceneMatch);
+                                    resolveInner(idMatch);
+                                }
+                                else {
+                                    resolveInner(id);
+                                }
+                            }).catch(function (e) {
+                                resolveInner(id);
+                            });
+                        }
+                    });
+                }).then(function (resultId) {
+                    Item.get(name, resultId).then(function (val) {
+                        resolve(val);
+                    });
+                });
+            }
+        });
+    };
     /** Get an item's local property asynchronously */
     Item.get = function (name, id) {
         return new Promise(function (resolve) {
-            var slot = id !== undefined && id !== null ? Item.attach(id) : -1;
             var hasGlobalSources = version_1.versionCompare(version_1.getVersion())
                 .is
                 .greaterThan(version_1.minVersion);
-            if ((!environment_1.Environment.isSourcePlugin() && String(slot) === '0') ||
-                (environment_1.Environment.isSourcePlugin() &&
-                    String(slot) === '0' &&
-                    !hasGlobalSources)) {
-                slot = -1;
+            var execCallFunc = function (slot) {
+                if ((!environment_1.Environment.isSourcePlugin() && String(slot) === '0') ||
+                    (environment_1.Environment.isSourcePlugin() &&
+                        String(slot) === '0' &&
+                        !hasGlobalSources)) {
+                    slot = -1;
+                }
+                internal_1.exec('GetLocalPropertyAsync' +
+                    (String(slot) === '-1' ? '' : Number(slot) + 1), name, function (val) {
+                    resolve(val);
+                });
+            };
+            var checkSlot = function (recId) {
+                if (id) {
+                    Item.attach(id, execCallFunc);
+                }
+                else {
+                    execCallFunc(-1);
+                }
+            };
+            checkSlot(id);
+        });
+    };
+    /**
+     * Helper function to check if the supplied item id still exist.
+     */
+    Item.wrapSet = function (name, value, srcId, id, updateId) {
+        return new Promise(function (resolve) {
+            if (version_1.versionCompare(version_1.getVersion())
+                .is
+                .lessThan(version_1.minVersion)) {
+                Item.set(name, value, id).then(function (val) {
+                    resolve(val);
+                });
             }
-            internal_1.exec('GetLocalPropertyAsync' +
-                (String(slot) === '-1' ? '' : slot + 1), name, function (val) {
-                resolve(val);
-            });
+            else {
+                Item.get('itemlist', id).then(function (itemlist) {
+                    return new Promise(function (resolveInner) {
+                        var itemsArray = itemlist.split(',');
+                        var secondJsonArr = [];
+                        if ((itemsArray.indexOf(id) > -1) && (itemsArray.length > 0) &&
+                            (itemsArray[0] !== 'null')) {
+                            resolveInner(itemsArray[0]);
+                        }
+                        else {
+                            var idMatch, sceneMatch;
+                            app_1.App.getAsList('presetconfig')
+                                .then(function (jsonArr) {
+                                for (var i = 0; i < jsonArr.length; i++) {
+                                    if (jsonArr[i].children !== undefined) {
+                                        for (var j = 0; j < jsonArr[i].children.length; j++) {
+                                            if (jsonArr[i].children[j]['srcid'] === srcId) {
+                                                sceneMatch = i;
+                                                idMatch = jsonArr[i].children[j]['id'];
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if (idMatch !== undefined) {
+                                        break;
+                                    }
+                                }
+                                if (idMatch !== undefined) {
+                                    return new Promise(function (previewResolve) {
+                                        previewResolve('');
+                                    });
+                                }
+                                else {
+                                    return new Promise(function (previewResolve, previewReject) {
+                                        app_1.App.getAsList('presetconfig:i12')
+                                            .then(function (previewJSONArr) {
+                                            var previewMatch = '';
+                                            for (var k = 0; k < previewJSONArr.length; ++k) {
+                                                if (previewJSONArr[k]['srcid'] === srcId) {
+                                                    previewMatch = previewJSONArr[k]['id'];
+                                                    break;
+                                                }
+                                            }
+                                            previewResolve(previewMatch);
+                                        }).catch(function (e) {
+                                            previewReject(e);
+                                        });
+                                    });
+                                }
+                            }).then(function (previewId) {
+                                if (previewId !== '') {
+                                    idMatch = previewId;
+                                    sceneMatch = 'i12';
+                                }
+                                if (idMatch !== undefined) {
+                                    updateId(idMatch, sceneMatch);
+                                    resolveInner(idMatch);
+                                }
+                                else {
+                                    resolveInner(id);
+                                }
+                            }).catch(function (e) {
+                                resolveInner(id);
+                            });
+                        }
+                    });
+                }).then(function (resultId) {
+                    Item.set(name, value, resultId).then(function (val) {
+                        resolve(val);
+                    });
+                });
+            }
         });
     };
     /** Sets an item's local property */
     Item.set = function (name, value, id) {
         return new Promise(function (resolve) {
-            var slot = id !== undefined && id !== null ? Item.attach(id) : -1;
-            var hasGlobalSources = version_1.versionCompare(version_1.getVersion())
-                .is
-                .greaterThan(version_1.minVersion);
-            if ((!environment_1.Environment.isSourcePlugin() && String(slot) === '0') ||
-                (environment_1.Environment.isSourcePlugin() &&
-                    String(slot) === '0' &&
-                    !hasGlobalSources)) {
-                slot = -1;
+            var slotPromise;
+            var slot;
+            if (id !== undefined && id !== null) {
+                slotPromise = new Promise(function (slotResolve) {
+                    Item.attach(id).then(function (res) {
+                        slotResolve(res);
+                    });
+                });
             }
-            internal_1.exec('SetLocalPropertyAsync' +
-                (String(slot) === '-1' ? '' : slot + 1), name, value, function (val) {
-                resolve(!(Number(val) < 0));
+            else {
+                slotPromise = new Promise(function (slotResolve) {
+                    slotResolve(-1);
+                });
+            }
+            slotPromise.then(function (newSlot) {
+                slot = newSlot;
+                var hasGlobalSources = version_1.versionCompare(version_1.getVersion())
+                    .is
+                    .greaterThan(version_1.minVersion);
+                if ((!environment_1.Environment.isSourcePlugin() && String(slot) === '0') ||
+                    (environment_1.Environment.isSourcePlugin() &&
+                        String(slot) === '0' &&
+                        !hasGlobalSources)) {
+                    slot = -1;
+                }
+                internal_1.exec('SetLocalPropertyAsync' +
+                    (String(slot) === '-1' ? '' : slot + 1), name, value, function (val) {
+                    resolve(!(Number(val) < 0));
+                });
             });
         });
     };
-    /** helper function to get current source on init */
+    /** For SourceProps and XBC version 2.7 below */
     Item.setBaseId = function (id) {
         Item.baseID = id;
     };
-    /** helper function for Source.getCurrentSource() */
+    /** For SourceProps and XBC version 2.7 below */
     Item.getBaseId = function () {
         return Item.baseID;
     };
@@ -8688,7 +11124,247 @@ var Item = (function () {
     return Item;
 })();
 exports.Item = Item;
-},{"../core/environment":5,"./internal":41,"./util/version":45}],43:[function(require,module,exports){
+},{"../core/environment":4,"../internal/app":49,"./internal":53,"./util/version":59}],55:[function(require,module,exports){
+/// <reference path="../../defs/es6-promise.d.ts" />
+var internal_1 = require('./internal');
+var ready_1 = require('../util/ready');
+var eventmanager_1 = require('./eventmanager');
+var eventemitter_1 = require('../util/eventemitter');
+var io_1 = require('../util/io');
+var extension_1 = require('../core/extension');
+var output_1 = require('../core/output');
+/**
+ * This class is used as a middleware for communication for a remote and proxy
+ * xjs. Receiving, Sending and Routing of messages is done here to make the
+ * calls reach their supposed methods, be processed and then returned to the
+ * caller as if it is just running locally.
+ *
+ * Note that this class does not create/handle the connection used to send/receive
+ * messages and should be declared initially upon readying the xjs, together with
+ * what type it is (remote/proxy).
+ * You can use websockets, datachannnels, etc... for this.
+ *
+ * Initial declaration on ready:
+ *
+ * ```javascript
+ * var xjs = require('xjs');
+ *
+ * xjs.ready({
+ *  remote: {
+ *    type: 'remote' // remote/proxy, default is local
+ *    sendMessage: function(message) {
+ *      myConnection.send(message) // this will be assigned to Remote.sendMessage
+ *    }
+ *  }
+ * })
+ *
+ * // Then handle received messages(string) should be passed to
+ * xjs.Remote.receiveMessage(message)
+ * ```
+ *
+ * Once this is set up, you can already use xjs normally as if you are just making
+ * calls locally.
+ */
+var Remote = (function () {
+    function Remote() {
+    }
+    /**
+     * param: (value: string)
+     *
+     * Handles received messages to properly relay it to either the proxy
+     * and make the actual calls, or remote and return the results from
+     * proxy.
+     *
+     */
+    Remote.receiveMessage = function (message) {
+        var messageObj = {};
+        return new Promise(function (resolve, reject) {
+            if (Remote.remoteType === 'remote' && !Remote._isVersion && message.indexOf('setVersion') !== -1) {
+                // Receive version on first message from proxy
+                Remote._isVersion = true;
+                var mockVersion = message;
+                var msgArray = message.split("::");
+                if (typeof msgArray[1] !== 'undefined') {
+                    mockVersion = msgArray[1];
+                }
+                resolve(ready_1.finishReady({ version: mockVersion }));
+            }
+            else if (Remote.remoteType === 'proxy' && message !== undefined && message === 'getVersion') {
+                // First message to get and send version
+                Remote.sendMessage('setVersion::' + window.navigator.appVersion);
+                resolve(true);
+            }
+            else if (Remote.remoteType === 'local') {
+                reject(Error('Remote calls do not work on local mode.'));
+            }
+            if (message !== undefined) {
+                try {
+                    messageObj = JSON.parse(decodeURIComponent(message));
+                }
+                catch (e) {
+                }
+            }
+            if (Object.keys(messageObj).length !== 0) {
+                switch (messageObj['type']) {
+                    case 'exec':
+                        Remote._execHandler(message);
+                        break;
+                    case 'event-emitter':
+                        Remote._eventEmitterHandler(message);
+                        break;
+                    case 'event-manager':
+                        Remote._eventManagerHandler(message);
+                        break;
+                    case 'window':
+                        Remote._allWindowHandler(message);
+                        break;
+                    case 'extWindow':
+                        Remote._allWindowHandler(message);
+                        break;
+                    case 'broadcastChannels':
+                        Remote._allWindowHandler(message);
+                        break;
+                    default:
+                        reject(Error('Call type is undefined.'));
+                        break;
+                }
+            }
+        });
+    };
+    // Handle exec messages
+    Remote._execHandler = function (message) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (Remote.remoteType === 'remote') {
+                internal_1.finalCallback(decodeURIComponent(message))
+                    .then(function (result) {
+                    resolve(result);
+                });
+            }
+            else if (Remote.remoteType === 'proxy') {
+                var messageObj = {};
+                return new Promise(function (resolve, reject) {
+                    messageObj = JSON.parse(decodeURIComponent(message));
+                    messageObj['callback'] = (function (result) {
+                        var retObj = {
+                            result: result,
+                            asyncId: Number(messageObj['asyncId']),
+                            type: 'exec'
+                        };
+                        resolve(Remote.sendMessage(encodeURIComponent(JSON.stringify(retObj))));
+                    });
+                    var messageArr = [messageObj['funcName']].concat(messageObj['args'], [messageObj['callback']]);
+                    internal_1.exec.apply(_this, messageArr);
+                });
+            }
+        });
+    };
+    // Handle emit on/off events
+    Remote._eventEmitterHandler = function (message) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (Remote.remoteType === 'remote') {
+                eventemitter_1.EventEmitter._finalCallback(message);
+            }
+            else if (Remote.remoteType === 'proxy') {
+                var messageObj = JSON.parse(decodeURIComponent(message));
+                messageObj['callback'] = (function (result) {
+                    var retObj = {
+                        result: result,
+                        type: 'event-emitter',
+                        id: messageObj['id'],
+                        event: messageObj['event']
+                    };
+                    resolve(Remote.sendMessage(encodeURIComponent(JSON.stringify(retObj))));
+                });
+                var messageArr = [messageObj['event'],
+                    messageObj['callback'], messageObj['id']];
+                eventemitter_1.EventEmitter._setCallback.call(_this, messageArr);
+            }
+        });
+    };
+    Remote._eventManagerHandler = function (message) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (Remote.remoteType === 'remote') {
+                eventmanager_1.EventManager._finalCallback(message);
+            }
+            else if (Remote.remoteType === 'proxy') {
+                var messageObj = JSON.parse(decodeURIComponent(message));
+                messageObj['callback'] = (function (result) {
+                    var retObj = {
+                        result: result,
+                        type: 'event-manager',
+                        id: messageObj['id'],
+                        event: messageObj['event']
+                    };
+                    resolve(Remote.sendMessage(encodeURIComponent(JSON.stringify(retObj))));
+                });
+                var messageArr = [messageObj['event'],
+                    messageObj['callback'], messageObj['id']];
+                eventmanager_1.EventManager._setCallback.call(_this, messageArr);
+            }
+        });
+    };
+    Remote._allWindowHandler = function (message) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            if (Remote.remoteType === 'remote') {
+                var messageObj = JSON.parse(decodeURIComponent(message));
+                if (messageObj['type'] === 'window') {
+                    io_1.IO._finalCallback(message);
+                }
+                else if (messageObj['type'] === 'extWindow') {
+                    extension_1.Extension._finalCallback(message);
+                }
+                else if (messageObj['type'] === 'broadcastChannels') {
+                    output_1.Output._finalCallback(message);
+                }
+                else if (messageObj['type'] === 'event-manager') {
+                    eventmanager_1.EventManager._finalCallback(message);
+                }
+            }
+            else if (Remote.remoteType === 'proxy') {
+                var messageObj = JSON.parse(decodeURIComponent(message));
+                messageObj['callback'] = (function (result) {
+                    var retObj = {
+                        result: result,
+                        file: messageObj['file'],
+                        type: messageObj['type']
+                    };
+                    resolve(Remote.sendMessage(encodeURIComponent(JSON.stringify(retObj))));
+                });
+                if (messageObj['type'] === 'window') {
+                    var messageArr = [messageObj['file'],
+                        messageObj['callback']];
+                    io_1.IO.getVideoDuration.call(_this, messageArr);
+                }
+                else if (messageObj['type'] === 'extWindow') {
+                    var Ext = messageObj['instance'] = new extension_1.Extension();
+                    Ext.getId(messageObj['callback']);
+                }
+                else if (messageObj['type'] === 'broadcastChannels') {
+                    output_1.Output._getBroadcastChannels(messageObj['id'], messageObj['callback']);
+                }
+                else if (messageObj['type'] === 'event-manager') {
+                    eventmanager_1.EventManager._finalCallback(messageObj['event']);
+                }
+            }
+        });
+    };
+    Remote._isVersion = false;
+    /**
+     * Initial assignment should be done on xjs.ready()
+     * Types:
+     *  - local (default)
+     *  - remote
+     *  - proxy
+     */
+    Remote.remoteType = 'local';
+    return Remote;
+})();
+exports.Remote = Remote;
+},{"../core/extension":5,"../core/output":22,"../util/eventemitter":71,"../util/io":72,"../util/ready":73,"./eventmanager":50,"./internal":53}],56:[function(require,module,exports){
 var xml_1 = require('./xml');
 var JSON = (function () {
     function JSON(xml) {
@@ -8759,7 +11435,41 @@ var JSON = (function () {
     return JSON;
 })();
 exports.JSON = JSON;
-},{"./xml":46}],44:[function(require,module,exports){
+},{"./xml":60}],57:[function(require,module,exports){
+var Logger = (function () {
+    function Logger() {
+    }
+    Logger.log = function (message) {
+        console.log(message);
+    };
+    Logger.warn = function (type, warnCaller, once) {
+        if (once === void 0) { once = false; }
+        switch (type) {
+            case 'sourceWarning':
+                Logger.warnMessage = 'Info: ' + warnCaller + ' accesses a source property,' +
+                    ' which is shared by all items linked to the source. Setting this property' +
+                    ' will affect all linked items.';
+                break;
+            case 'other':
+                //Other conditions that we can add for other warning instances
+                break;
+            default:
+                break;
+        }
+        if (!once) {
+            console.warn(Logger.warnMessage);
+        }
+        else if (!Logger.onceWarningsShown[warnCaller]) {
+            console.warn(Logger.warnMessage + Logger.onceMessage);
+            Logger.onceWarningsShown[warnCaller] = true;
+        }
+    };
+    Logger.onceWarningsShown = {};
+    Logger.onceMessage = " (This warning will only be shown once.)";
+    return Logger;
+})();
+exports.Logger = Logger;
+},{}],58:[function(require,module,exports){
 function applyMixins(derivedCtor, baseCtors) {
     baseCtors.forEach(function (baseCtor) {
         Object.getOwnPropertyNames(baseCtor.prototype).forEach(function (name) {
@@ -8771,8 +11481,17 @@ function applyMixins(derivedCtor, baseCtors) {
     });
 }
 exports.applyMixins = applyMixins;
-},{}],45:[function(require,module,exports){
+},{}],59:[function(require,module,exports){
+/*
+* List here the versions where we would limit a functionality.
+*/
 exports.minVersion = '2.8.1603.0401';
+exports.deleteSceneEventFixVersion = '2.8.1606.1601';
+exports.addSceneEventFixVersion = '2.8.1606.1701';
+exports.handlePreStreamDialogFixVersion = '3.1.1707.3101';
+exports.globalsrcMinVersion = '2.9';
+exports.itemSubscribeEventVersion = '2.9.1608.2301';
+exports.mockVersion = '';
 function versionCompare(version) {
     var parts = version.split('.');
     var comp = function (prev, curr, idx) {
@@ -8799,14 +11518,23 @@ function versionCompare(version) {
             equalsTo: function (compare) {
                 var cParts = compare.split('.');
                 return cParts.reduce(comp, parts[0]) === 0;
+            },
+            greaterThanOrEqualTo: function (compare) {
+                var cParts = compare.split('.');
+                return cParts.reduce(comp, parts[0]) === -1 || cParts.reduce(comp, parts[0]) === 0;
             }
         }
     };
 }
 exports.versionCompare = versionCompare;
+function setMockVersion(version) {
+    exports.mockVersion = version;
+}
+exports.setMockVersion = setMockVersion;
 function getVersion() {
     var xbcPattern = /XSplit Broadcaster\s(.*?)\s/;
     var xbcMatch = navigator.appVersion.match(xbcPattern);
+    xbcMatch = xbcMatch || exports.mockVersion.match(xbcPattern);
     if (xbcMatch !== null) {
         return xbcMatch[1];
     }
@@ -8815,7 +11543,7 @@ function getVersion() {
     }
 }
 exports.getVersion = getVersion;
-},{}],46:[function(require,module,exports){
+},{}],60:[function(require,module,exports){
 var XML = (function () {
     function XML(json) {
         var attributes = '';
@@ -8870,13 +11598,13 @@ var XML = (function () {
     return XML;
 })();
 exports.XML = XML;
-},{}],47:[function(require,module,exports){
+},{}],61:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var json_1 = require('../internal/util/json');
 var xml_1 = require('../internal/util/xml');
 /**
  * The AudioDevice Class is the object returned by
- * {@link #system/System System Class'} getAudioDevices method. It provides you
+ * {@link #system/System System Class} getAudioDevices method. It provides you
  * with methods to fetch the audio device object's attributes, and also provides
  * methods to convert it back to an XML object that is compatible with XBC.
  *
@@ -9015,7 +11743,7 @@ var AudioDevice = (function () {
     /**
      * return: boolean
      *
-     * Gets whether audio device is the system default
+     * Gets whether the audio device is enabled/not
      *
      * #### Usage
      *
@@ -9193,7 +11921,8 @@ var AudioDevice = (function () {
             dSoundGuid: deviceJXON['DSoundGuid'],
             defaultCommunication: (deviceJXON['DefaultCommunication'] === '1'),
             defaultConsole: (deviceJXON['DefaultConsole'] === '1'),
-            defaultMultimedia: (deviceJXON['DefaultMultimedia'] === '1')
+            defaultMultimedia: (deviceJXON['DefaultMultimedia'] === '1'),
+            mix: deviceJXON['mix']
         });
         audio._setLevel(Number(deviceJXON['level'] !== undefined ? deviceJXON['level'] * 100 : 100))
             ._setEnabled(deviceJXON['enable'] !== undefined ? deviceJXON['enable'] === '1' : true)
@@ -9202,23 +11931,21 @@ var AudioDevice = (function () {
             ._setDelay(Number(deviceJXON['delay'] !== undefined ? deviceJXON['delay'] : 0));
         return audio;
     };
-    AudioDevice.STATE_ACTIVE = 'Active';
-    AudioDevice.DATAFLOW_RENDER = 'Render';
-    AudioDevice.DATAFLOW_CAPTURE = 'Capture';
     AudioDevice.SYSTEM_LEVEL_MUTE = 0;
     AudioDevice.SYSTEM_LEVEL_ENABLE = 1;
     AudioDevice.SYSTEM_MUTE_CHANGE_NOT_ALLOWED = 255;
     return AudioDevice;
 })();
 exports.AudioDevice = AudioDevice;
-},{"../internal/util/json":43,"../internal/util/xml":46}],48:[function(require,module,exports){
+},{"../internal/util/json":56,"../internal/util/xml":60}],62:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var json_1 = require('../internal/util/json');
 var xml_1 = require('../internal/util/xml');
 var app_1 = require('../internal/app');
+var scene_1 = require('../core/scene');
 /**
  * The CameraDevice Class is the object returned by
- * {@link #system/System System Class'} getCameraDevices method. It provides
+ * {@link #system/System System Class} getCameraDevices method. It provides
  * you with methods to fetch the Camera Device's id, name, and to add it as
  * a source in the current scene.
  *
@@ -9230,11 +11957,8 @@ var app_1 = require('../internal/app');
  *
  * System.getCameraDevices().then(function(cameras) {
  *   for (var i in cameras) {
- *     // Do not include the imaginary xsplit camera if that ever exist
- *     if (cameras[i].getName().indexOf('xsplit') === -1) {
- *       xml = cameras[i].toXML();
- *       // do something with the XML here
- *     }
+ *     xml = cameras[i].toXML();
+ *     // do something with the XML here
  *   }
  * });
  * ```
@@ -9306,28 +12030,91 @@ var CameraDevice = (function () {
      */
     CameraDevice.parse = function (deviceJSON) {
         var cam = new CameraDevice({
-            id: deviceJSON['disp'],
+            id: deviceJSON['disp'].replace(/&amp;/ig, '&'),
             name: deviceJSON['name']
         });
         return cam;
     };
     /**
-     *  Adds this camera device to the current scene.
+     * param: (value?: number | Scene)
+     * ```
+     * return: Promise<boolean>
+     * ```
+     *
+     * Adds this camera device to the current scene by default.
+     * Accepts an optional parameter value, which, when supplied,
+     * points to the scene where item will be added instead.
      */
-    CameraDevice.prototype.addToScene = function () {
+    CameraDevice.prototype.addToScene = function (value) {
         var _this = this;
-        return new Promise(function (resolve) {
-            app_1.App.callFunc('addcamera', 'dev:' + _this._id).then(function () {
-                resolve(true);
+        return new Promise(function (resolve, reject) {
+            var scenePrefix = '';
+            var scenePromise;
+            var checkSplitMode;
+            checkSplitMode = new Promise(function (splitPromise) {
+                app_1.App.getGlobalProperty('splitmode').then(function (res) {
+                    if (res === '1' && !value) {
+                        scene_1.Scene.getActiveScene().then(function (val) {
+                            value = val;
+                            splitPromise(value);
+                        });
+                    }
+                    else {
+                        splitPromise(value);
+                    }
+                });
+            });
+            checkSplitMode.then(function (value) {
+                if (typeof value === 'number' || value instanceof scene_1.Scene) {
+                    scenePromise = new Promise(function (innerResolve, innerReject) {
+                        scene_1.Scene.getSceneCount().then(function (sceneCount) {
+                            if (typeof value === 'number') {
+                                var int = Math.floor(value);
+                                if (int > sceneCount || int === 0) {
+                                    innerReject(Error('Scene not existing.'));
+                                }
+                                else {
+                                    scenePrefix = 's:' + (int - 1) + '|';
+                                    innerResolve();
+                                }
+                            }
+                            else {
+                                value.getSceneNumber().then(function (int) {
+                                    if (int > sceneCount || int === 0) {
+                                        innerReject(Error('Scene not existing.'));
+                                    }
+                                    else {
+                                        scenePrefix = 's:' + (int - 1) + '|';
+                                        innerResolve();
+                                    }
+                                });
+                            }
+                        });
+                    });
+                }
+                else if (typeof value === 'undefined') {
+                    scenePromise = Promise.resolve();
+                }
+                else {
+                    scenePromise = Promise.reject(Error('Optional parameter \'scene\' only accepts integers or an XJS.Scene object'));
+                }
+                scenePromise.then(function () {
+                    return app_1.App.callFunc(scenePrefix + 'addcamera', 'dev:' + _this._id);
+                }).then(function () {
+                    resolve(true);
+                }).catch(function (err) {
+                    reject(err);
+                });
             });
         });
     };
     return CameraDevice;
 })();
 exports.CameraDevice = CameraDevice;
-},{"../internal/app":38,"../internal/util/json":43,"../internal/util/xml":46}],49:[function(require,module,exports){
+},{"../core/scene":23,"../internal/app":49,"../internal/util/json":56,"../internal/util/xml":60}],63:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var app_1 = require('../internal/app');
+var scene_1 = require('../core/scene');
 /**
  *  Class for adding files (such as images and media)
  *  from your file system to the stage.
@@ -9351,29 +12138,91 @@ var File = (function () {
         this._path = file;
     }
     /**
-     *  return: Promise<boolean>
+     * param: (value?: number | Scene)
+     * ```
+     * return: Promise<boolean>
+     * ```
      *
-     *  Adds this file to the current scene.
+     * Adds this file to the current scene by default.
+     * Accepts an optional parameter value, which, when supplied,
+     * points to the scene where item will be added instead.
      */
-    File.prototype.addToScene = function () {
+    File.prototype.addToScene = function (value) {
         var _this = this;
-        return new Promise(function (resolve) {
-            app_1.App.callFunc('addfile', _this._path).then(function () {
-                resolve(true);
+        return new Promise(function (resolve, reject) {
+            var scenePrefix = '';
+            var scenePromise;
+            var checkSplitMode;
+            checkSplitMode = new Promise(function (splitPromise) {
+                app_1.App.getGlobalProperty('splitmode').then(function (res) {
+                    if (res === '1' && !value) {
+                        scene_1.Scene.getActiveScene().then(function (val) {
+                            value = val;
+                            splitPromise(value);
+                        });
+                    }
+                    else {
+                        splitPromise(value);
+                    }
+                });
+            });
+            checkSplitMode.then(function (value) {
+                if (typeof value === 'number' || value instanceof scene_1.Scene) {
+                    scenePromise = new Promise(function (innerResolve, innerReject) {
+                        scene_1.Scene.getSceneCount().then(function (sceneCount) {
+                            if (typeof value === 'number') {
+                                var int = Math.floor(value);
+                                if (int > sceneCount || int === 0) {
+                                    innerReject(Error('Scene not existing.'));
+                                }
+                                else {
+                                    scenePrefix = 's:' + (int - 1) + '|';
+                                    innerResolve();
+                                }
+                            }
+                            else {
+                                value.getSceneNumber().then(function (int) {
+                                    if (int > sceneCount || int === 0) {
+                                        innerReject(Error('Scene not existing.'));
+                                    }
+                                    else {
+                                        scenePrefix = 's:' + (int - 1) + '|';
+                                        innerResolve();
+                                    }
+                                });
+                            }
+                        });
+                    });
+                }
+                else if (typeof value === 'undefined') {
+                    scenePromise = Promise.resolve();
+                }
+                else {
+                    scenePromise = Promise.reject(Error('Optional parameter \'scene\' only accepts integers or an XJS.Scene object'));
+                }
+                scenePromise.then(function () {
+                    return app_1.App.callFunc(scenePrefix + 'addfile', _this._path);
+                }).then(function () {
+                    resolve(true);
+                }).catch(function (err) {
+                    reject(err);
+                });
             });
         });
     };
     return File;
 })();
 exports.File = File;
-},{"../internal/app":38}],50:[function(require,module,exports){
+},{"../core/scene":23,"../internal/app":49}],64:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var rectangle_1 = require('../util/rectangle');
 var json_1 = require('../internal/util/json');
 var xml_1 = require('../internal/util/xml');
 var app_1 = require('../internal/app');
+var environment_1 = require('../core/environment');
+var scene_1 = require('../core/scene');
 /**
- * The Game Class is the object returned by {@link #system/System System Class'}
+ * The Game Class is the object returned by {@link #system/System System Class}
  * getGames method. It provides you with methods to fetch the game object's
  * attributes, as well as methods to add any game to the current scene.
  *
@@ -9613,13 +12462,75 @@ var Game = (function () {
         return xml_1.XML.parseJSON(gamesource);
     };
     /**
-     *  Adds this game to the current scene.
+     * param: (value?: number | Scene)
+     * ```
+     * return: Promise<boolean>
+     * ```
+     *
+     * Adds this game to the current scene by default.
+     * Accepts an optional parameter value, which, when supplied,
+     * points to the scene where item will be added instead.
      */
-    Game.prototype.addToScene = function () {
+    Game.prototype.addToScene = function (value) {
         var _this = this;
-        return new Promise(function (resolve) {
-            app_1.App.callFunc('addgamesource', 'dev:' + _this.toXML()).then(function () {
-                resolve(true);
+        return new Promise(function (resolve, reject) {
+            var scenePrefix = '';
+            var scenePromise;
+            var checkSplitMode;
+            checkSplitMode = new Promise(function (splitPromise) {
+                app_1.App.getGlobalProperty('splitmode').then(function (res) {
+                    if (res === '1' && !value) {
+                        scene_1.Scene.getActiveScene().then(function (val) {
+                            value = val;
+                            splitPromise(value);
+                        });
+                    }
+                    else {
+                        splitPromise(value);
+                    }
+                });
+            });
+            checkSplitMode.then(function (value) {
+                if (typeof value === 'number' || value instanceof scene_1.Scene) {
+                    scenePromise = new Promise(function (innerResolve, innerReject) {
+                        scene_1.Scene.getSceneCount().then(function (sceneCount) {
+                            if (typeof value === 'number') {
+                                var int = Math.floor(value);
+                                if (int > sceneCount || int === 0) {
+                                    innerReject(Error('Scene not existing.'));
+                                }
+                                else {
+                                    scenePrefix = 's:' + (int - 1) + '|';
+                                    innerResolve();
+                                }
+                            }
+                            else {
+                                value.getSceneNumber().then(function (int) {
+                                    if (int > sceneCount || int === 0) {
+                                        innerReject(Error('Scene not existing.'));
+                                    }
+                                    else {
+                                        scenePrefix = 's:' + (int - 1) + '|';
+                                        innerResolve();
+                                    }
+                                });
+                            }
+                        });
+                    });
+                }
+                else if (typeof value === 'undefined') {
+                    scenePromise = Promise.resolve();
+                }
+                else {
+                    scenePromise = Promise.reject(Error('Optional parameter \'scene\' only accepts integers or an XJS.Scene object'));
+                }
+                scenePromise.then(function () {
+                    return app_1.App.callFunc(scenePrefix + 'addgamesource', 'dev:' + _this.toXML());
+                }).then(function () {
+                    resolve(true);
+                }).catch(function (err) {
+                    reject(err);
+                });
             });
         });
     };
@@ -9653,11 +12564,103 @@ var Game = (function () {
             ad._fpsRender = 0;
             ad._fpsCapture = 0;
             ad._imagename = "";
-            Game._autoDetect.addToScene = function () {
-                return new Promise(function (resolve) {
-                    var adstring = '<item GameCapTrackActive="1" GameCapTrackActiveFullscreen="0" item="&lt;src pid=&quot;0&quot; handle=&quot;0&quot; hwnd=&quot;0&quot; GapiType=&quot;&quot; width=&quot;0&quot; height=&quot;0&quot; flags=&quot;0&quot; wndname=&quot;&quot; lastframets=&quot;0&quot; fpsRender=&quot;0.000000&quot; fpsCapture=&quot;0.000000&quot; imagename=&quot;&quot;/&gt; " name="Game: Auto Detect"  type="7" pos_left="0" pos_top="0" pos_right="0.5" pos_bottom="0.5"/>';
-                    app_1.App.callFunc('additem', adstring).then(function () {
-                        resolve(true);
+            Game._autoDetect.addToScene = function (value) {
+                return new Promise(function (resolve, reject) {
+                    var scenePrefix = '';
+                    var scenePromise;
+                    var checkSplitMode;
+                    checkSplitMode = new Promise(function (splitPromise) {
+                        app_1.App.getGlobalProperty('splitmode').then(function (res) {
+                            if (res === '1' && !value) {
+                                scene_1.Scene.getActiveScene().then(function (val) {
+                                    value = val;
+                                    splitPromise(value);
+                                });
+                            }
+                            else {
+                                splitPromise(value);
+                            }
+                        });
+                    });
+                    checkSplitMode.then(function (value) {
+                        if (typeof value === 'number' || value instanceof scene_1.Scene) {
+                            scenePromise = new Promise(function (innerResolve, innerReject) {
+                                scene_1.Scene.getSceneCount().then(function (sceneCount) {
+                                    if (typeof value === 'number') {
+                                        var int = Math.floor(value);
+                                        if (int > sceneCount || int === 0) {
+                                            innerReject(Error('Scene not existing.'));
+                                        }
+                                        else {
+                                            scenePrefix = 's:' + (int - 1) + '|';
+                                            innerResolve();
+                                        }
+                                    }
+                                    else {
+                                        value.getSceneNumber().then(function (int) {
+                                            if (int > sceneCount || int === 0) {
+                                                innerReject(Error('Scene not existing.'));
+                                            }
+                                            else {
+                                                scenePrefix = 's:' + (int - 1) + '|';
+                                                innerResolve();
+                                            }
+                                        });
+                                    }
+                                });
+                            });
+                        }
+                        else if (typeof value === 'undefined') {
+                            scenePromise = Promise.resolve();
+                        }
+                        else {
+                            scenePromise = Promise.reject(Error('Optional parameter \'scene\' only accepts integers or an XJS.Scene object'));
+                        }
+                        scenePromise.then(function () {
+                            var defposPromise;
+                            if (environment_1.Environment.isSourcePlugin()) {
+                                defposPromise = new Promise(function (defposResolve) {
+                                    app_1.App.get('presetconfig:-1').then(function (presetConfig) {
+                                        var placementJSON = json_1.JSON.parse(presetConfig);
+                                        defposResolve(placementJSON['defpos']);
+                                    });
+                                });
+                            }
+                            else {
+                                defposPromise = new Promise(function (defposResolve) {
+                                    app_1.App.get('preset:0').then(function (main) {
+                                        return app_1.App.get('presetconfig:' + main);
+                                    }).then(function (presetConfig) {
+                                        var placementJSON = json_1.JSON.parse(presetConfig);
+                                        defposResolve(placementJSON['defpos']);
+                                    });
+                                });
+                            }
+                            defposPromise.then(function (defpos) {
+                                var posString;
+                                if (defpos === '0') {
+                                    posString = 'pos_left="0" pos_top="0" pos_right="0.5" pos_bottom="0.5"';
+                                }
+                                else if (defpos === '1') {
+                                    posString = 'pos_left="0.5" pos_top="0" pos_right="1" pos_bottom="0.5"';
+                                }
+                                else if (defpos === '2') {
+                                    posString = 'pos_left="0" pos_top="0.5" pos_right="0.5" pos_bottom="1"';
+                                }
+                                else if (defpos === '3') {
+                                    posString = 'pos_left="0.5" pos_top="0.5" pos_right="1" pos_bottom="1"';
+                                }
+                                else {
+                                    posString = 'pos_left="0.25" pos_top="0.25" pos_right="0.75" pos_bottom="0.75"';
+                                }
+                                var adstring = '<item GameCapTrackActive="1" GameCapTrackActiveFullscreen="0" item="&lt;src pid=&quot;0&quot; handle=&quot;0&quot; hwnd=&quot;0&quot; GapiType=&quot;&quot; width=&quot;0&quot; height=&quot;0&quot; flags=&quot;0&quot; wndname=&quot;&quot; lastframets=&quot;0&quot; fpsRender=&quot;0.000000&quot; fpsCapture=&quot;0.000000&quot; imagename=&quot;&quot;/&gt; " name="Game: Auto Detect"  type="7" ' + posString + ' />';
+                                return app_1.App.callFunc(scenePrefix + 'additem', adstring);
+                            }).then(function () {
+                                resolve(true);
+                            });
+                        }).catch(function (err) {
+                            reject(err);
+                        });
                     });
                 });
             };
@@ -9667,11 +12670,12 @@ var Game = (function () {
     return Game;
 })();
 exports.Game = Game;
-},{"../internal/app":38,"../internal/util/json":43,"../internal/util/xml":46,"../util/rectangle":60}],51:[function(require,module,exports){
+},{"../core/environment":4,"../core/scene":23,"../internal/app":49,"../internal/util/json":56,"../internal/util/xml":60,"../util/rectangle":74}],65:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var json_1 = require('../internal/util/json');
 var xml_1 = require('../internal/util/xml');
 var app_1 = require('../internal/app');
+var scene_1 = require('../core/scene');
 /**
  * The MicrophoneDevice class provides you with methods to add a microphone
  * device as a source on the stage.
@@ -9692,6 +12696,14 @@ var app_1 = require('../internal/app');
 var MicrophoneDevice = (function () {
     function MicrophoneDevice() {
     }
+    /**
+     * param: (deviceJXON: JXON)
+     * ```
+     * return MicrophoneDevice
+     * ```
+     * Create a MicrophoneDevice onject based on a JXON object
+     *
+     */
     MicrophoneDevice.parse = function (jxon) {
         var m = new MicrophoneDevice();
         m._disp = jxon['disp'];
@@ -9733,52 +12745,292 @@ var MicrophoneDevice = (function () {
         return xml_1.XML.parseJSON(microphone);
     };
     /**
-     *  Adds this microphone device to the current scene.
+     * param: (value?: number | Scene)
+     * ```
+     * return: Promise<boolean>
+     * ```
+     *
+     * Adds this microphone device to the current scene by default.
+     * Accepts an optional parameter value, which, when supplied,
+     * points to the scene where item will be added instead.
      */
-    MicrophoneDevice.prototype.addToScene = function () {
+    MicrophoneDevice.prototype.addToScene = function (value) {
         var _this = this;
-        return new Promise(function (resolve) {
-            app_1.App.callFunc('additem', _this.toXML().toString()).then(function () {
-                resolve(true);
+        return new Promise(function (resolve, reject) {
+            var scenePrefix = '';
+            var scenePromise;
+            var checkSplitMode;
+            checkSplitMode = new Promise(function (splitPromise) {
+                app_1.App.getGlobalProperty('splitmode').then(function (res) {
+                    if (res === '1' && !value) {
+                        scene_1.Scene.getActiveScene().then(function (val) {
+                            value = val;
+                            splitPromise(value);
+                        });
+                    }
+                    else {
+                        splitPromise(value);
+                    }
+                });
+            });
+            checkSplitMode.then(function (value) {
+                if (typeof value === 'number' || value instanceof scene_1.Scene) {
+                    scenePromise = new Promise(function (innerResolve, innerReject) {
+                        scene_1.Scene.getSceneCount().then(function (sceneCount) {
+                            if (typeof value === 'number') {
+                                var int = Math.floor(value);
+                                if (int > sceneCount || int === 0) {
+                                    innerReject(Error('Scene not existing.'));
+                                }
+                                else {
+                                    scenePrefix = 's:' + (int - 1) + '|';
+                                    innerResolve();
+                                }
+                            }
+                            else {
+                                value.getSceneNumber().then(function (int) {
+                                    if (int > sceneCount || int === 0) {
+                                        innerReject(Error('Scene not existing.'));
+                                    }
+                                    else {
+                                        scenePrefix = 's:' + (int - 1) + '|';
+                                        innerResolve();
+                                    }
+                                });
+                            }
+                        });
+                    });
+                }
+                else if (typeof value === 'undefined') {
+                    scenePromise = Promise.resolve();
+                }
+                else {
+                    scenePromise = Promise.reject(Error('Optional parameter \'scene\' only accepts integers or an XJS.Scene object'));
+                }
+                scenePromise.then(function () {
+                    return app_1.App.callFunc(scenePrefix + 'additem', _this.toXML().toString());
+                }).then(function () {
+                    resolve(true);
+                }).catch(function (err) {
+                    reject(err);
+                });
             });
         });
     };
     return MicrophoneDevice;
 })();
 exports.MicrophoneDevice = MicrophoneDevice;
-},{"../internal/app":38,"../internal/util/json":43,"../internal/util/xml":46}],52:[function(require,module,exports){
+},{"../core/scene":23,"../internal/app":49,"../internal/util/json":56,"../internal/util/xml":60}],66:[function(require,module,exports){
+/// <reference path="../../defs/es6-promise.d.ts" />
 var internal_1 = require('../internal/internal');
+var app_1 = require('../internal/app');
+var scene_1 = require('../core/scene');
+var environment_1 = require('../core/environment');
 /**
- *  This class servers to allow developers to add new screen regions or window
- *  regions to the stage in XSplit Broadcaster.
+ * The Screen Class is the object returned by {@link #system/System System Class}
+ * getAvailableScreens method. It provides you with methods to add the screen object
+ * to the current scene or any scene specified or use it's static method to fire a
+ * selector for you to manually select a screen/screen region to capture and add on
+ * your selected scene.
+ *
+ * ### Basic Usage
+ *
+ * ```javascript
+ * var XJS = require('xjs');
+ * var System = XJS.System;
+ *
+ * System.getAvailableScreens().then(function(screens) {
+ *  for (var i in screens) {
+ *    screens[i].addToScene();
+ *  }
+ * });
+ * ```
  */
 var Screen = (function () {
-    function Screen() {
+    function Screen(props) {
+        this._title = props['title'];
+        this._processDetail = props['processDetail'];
+        this._class = props['class'];
+        this._hwnd = props['hwnd'];
     }
     /**
-     * Initializes the screen region selector crosshair so user may select
-     * a desktop region or a window to add to the stage in the current scene.
+     * param: (value?: number | Scene)
+     * ```
+     * return: Promise<boolean>
+     * ```
+     *
+     * Adds the prepared screen instance to the current screen by defualt.
+     * Accpets optional parameter value, whhich when supplied, points
+     * to the scene where the item will be added instead.
+     *
      */
-    Screen.prototype.addToScene = function () {
-        return new Promise(function (resolve) {
-            internal_1.exec('AppCallFunc', 'addscreen');
-            resolve(true);
+    Screen.prototype.addToScene = function (value) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (_this instanceof Screen && !environment_1.Environment.isSourcePlugin()) {
+                var scenePrefix = '';
+                var scenePromise;
+                if (typeof value === 'number' || value instanceof scene_1.Scene) {
+                    scenePromise = new Promise(function (innerResolve, innerReject) {
+                        scene_1.Scene.getSceneCount().then(function (sceneCount) {
+                            if (typeof value === 'number') {
+                                var int = Math.floor(value);
+                                if (int > sceneCount || int === 0) {
+                                    innerReject(new Error('Scene not existing.'));
+                                }
+                                else {
+                                    scenePrefix = 's:' + (int - 1) + '|';
+                                    innerResolve();
+                                }
+                            }
+                            else {
+                                value.getSceneNumber().then(function (int) {
+                                    if (int > sceneCount || int === 0) {
+                                        innerReject(new Error('Scene not existing.'));
+                                    }
+                                    else {
+                                        scenePrefix = 's:' + (int - 1) + '|';
+                                        innerResolve();
+                                    }
+                                });
+                            }
+                        });
+                    });
+                }
+                else if (typeof value === 'undefined') {
+                    scenePromise = Promise.resolve();
+                }
+                else {
+                    scenePromise = Promise.reject(new Error('Optional parameter \'scene\' only accepts integers or an XJS.Scene object'));
+                }
+                scenePromise.then(function () {
+                    return "<screen module=\"" + _this._processDetail + "\" window=\"" + _this._title + "\" class=\"" + _this._class + "\" hwnd=\"" + _this._hwnd + "\" wclient=\"1\" left=\"0\" top=\"0\" width=\"0\" height=\"0\" />";
+                }).then(function (screen) {
+                    return app_1.App.callFunc(scenePrefix + 'addscreen', screen);
+                }).then(function () {
+                    resolve(true);
+                }).catch(function (err) {
+                    reject(err);
+                });
+            }
+            else {
+                reject(Error('Instance is not a Screen'));
+            }
         });
+    };
+    /**
+     * param: (value?: number | Scene)
+     * ```
+     * return: Promise<boolean>
+     * ```
+     *
+     * Initializes the screen region selector crosshair
+     * so user may select a desktop region or a window to add to the stage in the current scene.
+     * Accepts an optional parameter value, which, when supplied,
+     * points to the scene where item will be added instead.
+     *
+     */
+    Screen.addToScene = function (value) {
+        return new Promise(function (resolve, reject) {
+            var scenePrefix = '';
+            var scenePromise;
+            var checkSplitMode;
+            checkSplitMode = new Promise(function (splitPromise) {
+                app_1.App.getGlobalProperty('splitmode').then(function (res) {
+                    if (res === '1' && !value) {
+                        scene_1.Scene.getActiveScene().then(function (val) {
+                            value = val;
+                            splitPromise(value);
+                        });
+                    }
+                    else {
+                        splitPromise(value);
+                    }
+                });
+            });
+            checkSplitMode.then(function (value) {
+                if (typeof value === 'number' || value instanceof scene_1.Scene) {
+                    scenePromise = new Promise(function (innerResolve, innerReject) {
+                        scene_1.Scene.getSceneCount().then(function (sceneCount) {
+                            if (typeof value === 'number') {
+                                var int = Math.floor(value);
+                                if (int > sceneCount || int === 0) {
+                                    innerReject(Error('Scene not existing.'));
+                                }
+                                else {
+                                    scenePrefix = 's:' + (int - 1) + '|';
+                                    innerResolve();
+                                }
+                            }
+                            else {
+                                value.getSceneNumber().then(function (int) {
+                                    if (int > sceneCount || int === 0) {
+                                        innerReject(Error('Scene not existing.'));
+                                    }
+                                    else {
+                                        scenePrefix = 's:' + (int - 1) + '|';
+                                        innerResolve();
+                                    }
+                                });
+                            }
+                        });
+                    });
+                }
+                else if (typeof value === 'undefined') {
+                    scenePromise = Promise.resolve();
+                }
+                else {
+                    scenePromise = Promise.reject(Error('Optional parameter \'scene\' only accepts integers or an XJS.Scene object'));
+                }
+                scenePromise.then(function () {
+                    internal_1.exec('AppCallFunc', scenePrefix + 'addscreen');
+                    resolve(true);
+                }).catch(function (err) {
+                    reject(err);
+                });
+            });
+        });
+    };
+    /**
+     * param: Object
+     * ```
+     * return Screen
+     * ```
+     *
+     * Converts an object into a Screen object.
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * var XJS = require('xjs');
+     * var screen = XJS.Screen.parse(jsonObj);
+     * ```
+     */
+    Screen.parse = function (screenInfo) {
+        var screen = new Screen({
+            'title': screenInfo['title'],
+            'class': screenInfo['class'],
+            'processDetail': screenInfo['processDetail'],
+            'hwnd': screenInfo['hwnd']
+        });
+        return screen;
     };
     return Screen;
 })();
 exports.Screen = Screen;
-},{"../internal/internal":41}],53:[function(require,module,exports){
+},{"../core/environment":4,"../core/scene":23,"../internal/app":49,"../internal/internal":53}],67:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var app_1 = require('../internal/app');
 var audio_1 = require('./audio');
 var microphone_1 = require('./microphone');
 var camera_1 = require('./camera');
 var game_1 = require('./game');
+var screen_1 = require('./screen');
 var environment_1 = require('../core/environment');
 var internal_1 = require('../internal/internal');
+var dll_1 = require('../core/dll');
 /**
- * This enum is used for {@link #system/System System Class'} getAudioDevices
+ * This enum is used for {@link #system/System System Class} getAudioDevices
  * method's first parameter.
  *
  * ### Basic Usage
@@ -9795,7 +13047,7 @@ var internal_1 = require('../internal/internal');
 })(exports.AudioDeviceDataflow || (exports.AudioDeviceDataflow = {}));
 var AudioDeviceDataflow = exports.AudioDeviceDataflow;
 /**
- * This enum is used for {@link #system/System System Class'} getAudioDevices
+ * This enum is used for {@link #system/System System Class} getAudioDevices
  * method's second parameter.
  *
  * ### Basic Usage
@@ -9906,7 +13158,11 @@ var System = (function () {
                         if (String(device['disp']).toLowerCase().indexOf('xsplit') === -1 &&
                             String(device['disp']).toLowerCase() !==
                                 ('@DEVICE:SW:{860BB310-5D01-11D0-BD3B-00A0C911CE86}\\' +
-                                    '{778abfb2-e87b-48a2-8d33-675150fcf8a2}').toLowerCase()) {
+                                    '{778abfb2-e87b-48a2-8d33-675150fcf8a2}').toLowerCase() &&
+                            String(device['name']).toLowerCase().indexOf(('Intel(R) RealSense(TM) 3D Camera Virtual Driver').toLowerCase()) === -1 &&
+                            String(device['name']).toLowerCase().indexOf(('Intel(R) RealSense(TM) Camera SR300 Virtual Driver').toLowerCase()) === -1 &&
+                            String(device['disp']).toLowerCase().indexOf(('@DEVICE:PNP:\\\\?\\USB#VID_8086&PID_0AA5&MI_02#').toLowerCase()) === -1 &&
+                            String(device['disp']).toLowerCase().indexOf(('@DEVICE:PNP:\\\\?\\USB#VID_8086&PID_0A66&MI_02#').toLowerCase()) === -1) {
                             devices.push(camera_1.CameraDevice.parse(device));
                         }
                     }
@@ -9975,6 +13231,60 @@ var System = (function () {
         });
     };
     /**
+     * return: Promise<Screen[]>
+     *
+     * Gets all available screen/windows that may be added to the stage
+     * See also: {@link #system/Screen System/Screen}
+     *
+     * #### Usage
+     *
+     * ```javascript
+     * System.getAvailableScreens().then(function(screens) {
+     *   screens[0].addToScene(); // add first screen to stage
+     * });
+     * ```
+     */
+    System.getAvailableScreens = function () {
+        return new Promise(function (resolve) {
+            var screens = [];
+            var devices = [];
+            var getParentWindows = dll_1.Dll.call('xsplit.EnumParentWindows');
+            getParentWindows.then(function (list) {
+                var processArray = list.split(',');
+                return Promise.all(processArray.map(function (process) {
+                    return Promise.all([
+                        dll_1.Dll.call('xsplit.GetWindowTitle', process),
+                        dll_1.Dll.call('xsplit.GetWindowClassName', process),
+                        dll_1.Dll.call('xsplit.GetWindowProcessId', process),
+                        Promise.resolve(process)
+                    ]);
+                }));
+            }).then(function (windowDetailsArr) {
+                var devices = windowDetailsArr
+                    .filter(function (windowDetail) { return windowDetail[0] !== ''; })
+                    .filter(function (windowDetail) { return windowDetail[0].indexOf('XSplit Broadcaster') !== 0; })
+                    .filter(function (windowDetail) { return windowDetail[1].indexOf('Shell_TrayWnd') !== 0; })
+                    .filter(function (windowDetail) { return windowDetail[1].indexOf('Button') !== 0; })
+                    .filter(function (windowDetail) { return windowDetail[1].indexOf('Windows.UI.Core.CoreWindow') !== 0; })
+                    .map(function (windowDetail) {
+                    dll_1.Dll.call('xsplit.GetProcessDetailsKernel', windowDetail[2])
+                        .then(function (detail) {
+                        var dev = {
+                            'title': windowDetail[0],
+                            'class': windowDetail[1],
+                            'processDetail': detail.toLocaleLowerCase(),
+                            'hwnd': windowDetail[3]
+                        };
+                        return screens.push(screen_1.Screen.parse(dev));
+                    });
+                });
+                return devices;
+            }).then(function (res) {
+                resolve(screens);
+            });
+        });
+    };
+    /**
      * return: Promise<string[]>
      *
      * Gets array of system-installed fonts
@@ -9988,7 +13298,7 @@ var System = (function () {
      *   var fontsArrayLength = fontsArray.length;
      *   for (var i = 0; i < fontsArrayLength; ++i) {
      *     var option = document.createElement('option');
-     *     option.text = 'Kiwi';
+     *     option.text = fontsArray[i];
      *     mySelect.add(option);
      *   }
      * });
@@ -10032,17 +13342,20 @@ var System = (function () {
                 reject(Error('function is not available for source'));
             }
             else {
-                var res = internal_1.exec('GetCursorPos');
-                if (typeof res === 'string') {
-                    var posArr = res.split(',');
-                    var pos = {};
-                    pos['x'] = Number(posArr[0]);
-                    pos['y'] = Number(posArr[1]);
-                    resolve(pos);
-                }
-                else {
-                    reject(Error('cannot fetch current cursor position'));
-                }
+                var res;
+                internal_1.exec('GetCursorPos').then(function (result) {
+                    res = result;
+                    if (typeof res === 'string') {
+                        var posArr = res.split(',');
+                        var pos = {};
+                        pos['x'] = Number(posArr[0]);
+                        pos['y'] = Number(posArr[1]);
+                        resolve(pos);
+                    }
+                    else {
+                        reject(Error('cannot fetch current cursor position'));
+                    }
+                });
             }
         });
     };
@@ -10063,7 +13376,7 @@ var System = (function () {
                 reject(Error('function is not available for source'));
             }
             else if (typeof pos.x !== 'number' || typeof pos.y !== 'number') {
-                reject(Error('invalid parameters'));
+                reject(Error('Invalid parameters. Valid format is:: "JSON: {x: number, y: number}"'));
             }
             else {
                 internal_1.exec('SetCursorPos', String(pos.x), String(pos.y));
@@ -10074,9 +13387,10 @@ var System = (function () {
     return System;
 })();
 exports.System = System;
-},{"../core/environment":5,"../internal/app":38,"../internal/internal":41,"./audio":47,"./camera":48,"./game":50,"./microphone":51}],54:[function(require,module,exports){
+},{"../core/dll":3,"../core/environment":4,"../internal/app":49,"../internal/internal":53,"./audio":61,"./camera":62,"./game":64,"./microphone":65,"./screen":66}],68:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var app_1 = require('../internal/app');
+var scene_1 = require('../core/scene');
 /**
  *  Class for adding a web source to the stage.
  *  URLs will use http by default unless https
@@ -10108,7 +13422,7 @@ var Url = (function () {
                 resolve(_this._url);
             }
             else if (/[a-z]+:\/\//i.test(_this._url)) {
-                reject(new Error('You may only add HTTP or HTTPS URLs to the stage.'));
+                reject(Error('You may only add HTTP or HTTPS URLs to the stage.'));
             }
             else {
                 resolve('http://' + _this._url);
@@ -10116,34 +13430,93 @@ var Url = (function () {
         });
     };
     /**
-     *  return: Promise<boolean>
+     * param: (value?: number | Scene)
+     * ```
+     * return: Promise<boolean>
+     * ```
      *
-     *  Adds this URL to the current scene as an HTML source.
+     * Adds this URL to the current scene as an HTML source by default.
+     * Accepts an optional parameter value, which, when supplied,
+     * points to the scene where item will be added instead.
      *
      *  Will raise an error if URL is not http or https.
      */
-    Url.prototype.addToScene = function () {
+    Url.prototype.addToScene = function (value) {
         var _this = this;
         return new Promise(function (resolve, reject) {
-            _this._getUrl().then(function (url) {
-                app_1.App.callFunc('addurl', url).then(function () {
-                    resolve(true);
+            var scenePrefix = '';
+            var scenePromise;
+            var checkSplitMode;
+            checkSplitMode = new Promise(function (splitPromise) {
+                app_1.App.getGlobalProperty('splitmode').then(function (res) {
+                    if (res === '1' && !value) {
+                        scene_1.Scene.getActiveScene().then(function (val) {
+                            value = val;
+                            splitPromise(value);
+                        });
+                    }
+                    else {
+                        splitPromise(value);
+                    }
                 });
-            }).catch(function (error) {
-                reject(error);
+            });
+            checkSplitMode.then(function (value) {
+                if (typeof value === 'number' || value instanceof scene_1.Scene) {
+                    scenePromise = new Promise(function (innerResolve, innerReject) {
+                        scene_1.Scene.getSceneCount().then(function (sceneCount) {
+                            if (typeof value === 'number') {
+                                var int = Math.floor(value);
+                                if (int > sceneCount || int === 0) {
+                                    innerReject(Error('Scene not existing.'));
+                                }
+                                else {
+                                    scenePrefix = 's:' + (int - 1) + '|';
+                                    innerResolve();
+                                }
+                            }
+                            else {
+                                value.getSceneNumber().then(function (int) {
+                                    if (int > sceneCount || int === 0) {
+                                        innerReject(Error('Scene not existing.'));
+                                    }
+                                    else {
+                                        scenePrefix = 's:' + (int - 1) + '|';
+                                        innerResolve();
+                                    }
+                                });
+                            }
+                        });
+                    });
+                }
+                else if (typeof value === 'undefined') {
+                    scenePromise = Promise.resolve();
+                }
+                else {
+                    scenePromise = Promise.reject(Error('Optional parameter \'scene\' only accepts integers or an XJS.Scene object'));
+                }
+                scenePromise.then(function () {
+                    return _this._getUrl();
+                }).then(function (url) {
+                    return app_1.App.callFunc(scenePrefix + 'addurl', url);
+                }).then(function () {
+                    resolve(true);
+                }).catch(function (err) {
+                    reject(err);
+                });
             });
         });
     };
     return Url;
 })();
 exports.Url = Url;
-},{"../internal/app":38}],55:[function(require,module,exports){
+},{"../core/scene":23,"../internal/app":49}],69:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var app_1 = require('../internal/app');
 var json_1 = require('../internal/util/json');
 var xml_1 = require('../internal/util/xml');
 var io_1 = require('../util/io');
 var environment_1 = require('../core/environment');
+var scene_1 = require('../core/scene');
 /**
  *  Special class for adding a video playlist to the stage.
  *
@@ -10189,49 +13562,147 @@ var VideoPlaylist = (function () {
             Promise.all(filePromises).then(function (duration) {
                 var fileItems = new json_1.JSON();
                 var isError = false;
-                for (var i = 0; i < _this._playlist.length; i++) {
-                    if (typeof duration === 'object') {
-                        isError = true;
-                        break;
+                if (_this._playlist.length) {
+                    for (var i = 0; i < _this._playlist.length; i++) {
+                        if (typeof duration[i] === 'object') {
+                            isError = true;
+                            break;
+                        }
+                        _this._fileplaylist += _this._playlist[i] + '*' + i + '*1*' +
+                            duration[i] + '*100*0*0*0*0*0|';
                     }
-                    _this._fileplaylist += _this._playlist[i] + '*' + i + '*1*' +
-                        duration[i] + '*100*0*0*0*0*0|';
-                }
-                if (!isError) {
-                    fileItems.tag = 'item';
-                    fileItems['type'] = '1';
-                    fileItems['name'] = 'Video Playlist';
-                    fileItems['pos_left'] = '0.250000';
-                    fileItems['pos_top'] = '0.250000';
-                    fileItems['pos_right'] = '0.750000';
-                    fileItems['pos_bottom'] = '0.750000';
-                    fileItems['item'] = _this._playlist[0] + '*0';
-                    fileItems['FilePlaylist'] = _this._fileplaylist;
-                    resolve(xml_1.XML.parseJSON(fileItems));
+                    var _inner_this = _this;
+                    if (!isError) {
+                        app_1.App.get('preset:0').then(function (main) {
+                            return app_1.App.get('presetconfig:' + main);
+                        }).then(function (presetConfig) {
+                            var placementJSON = json_1.JSON.parse(presetConfig);
+                            var defpos = placementJSON['defpos'];
+                            fileItems.tag = 'item';
+                            fileItems['type'] = '1';
+                            fileItems['name'] = 'Video Playlist';
+                            if (defpos === '0') {
+                                fileItems['pos_left'] = '0';
+                                fileItems['pos_top'] = '0';
+                                fileItems['pos_right'] = '0.5';
+                                fileItems['pos_bottom'] = '0.5';
+                            }
+                            else if (defpos === '1') {
+                                fileItems['pos_left'] = '0.5';
+                                fileItems['pos_top'] = '0';
+                                fileItems['pos_right'] = '1';
+                                fileItems['pos_bottom'] = '0.5';
+                            }
+                            else if (defpos === '2') {
+                                fileItems['pos_left'] = '0';
+                                fileItems['pos_top'] = '0.5';
+                                fileItems['pos_right'] = '0.5';
+                                fileItems['pos_bottom'] = '1';
+                            }
+                            else if (defpos === '3') {
+                                fileItems['pos_left'] = '0.5';
+                                fileItems['pos_top'] = '0.5';
+                                fileItems['pos_right'] = '1';
+                                fileItems['pos_bottom'] = '1';
+                            }
+                            else {
+                                fileItems['pos_left'] = '0.25';
+                                fileItems['pos_top'] = '0.25';
+                                fileItems['pos_right'] = '0.75';
+                                fileItems['pos_bottom'] = '0.75';
+                            }
+                            fileItems['item'] = _inner_this._playlist[0] + '*0';
+                            fileItems['FilePlaylist'] = _inner_this._fileplaylist;
+                            resolve(xml_1.XML.parseJSON(fileItems));
+                        });
+                    }
+                    else {
+                        reject(Error('One or more files included are invalid.'));
+                    }
                 }
                 else {
-                    reject(new Error('One or more files included are invalid.'));
+                    reject(Error('No media file included.'));
                 }
             });
         });
     };
     /**
-     *  Adds the prepared video playlist to the current scene.
+     * param: (value?: number | Scene)
+     * ```
+     *  return: Promise<boolean>
+     * ```
      *
-     *  This function is not available to sources.
+     * Adds the prepared video playlist to the current scene by default.
+     * Accepts an optional parameter value, which when supplied,
+     * points to the scene where item will be added instead.
+     * This function is not available to sources.
      */
-    VideoPlaylist.prototype.addToScene = function () {
+    VideoPlaylist.prototype.addToScene = function (value) {
         var _this = this;
         return new Promise(function (resolve, reject) {
             if (environment_1.Environment.isSourcePlugin()) {
                 reject(Error('This function is not available to sources.'));
             }
             else {
-                _this.toXML().then(function (fileitem) {
-                    app_1.App.callFunc('additem', ' ' + fileitem)
-                        .then(function () { resolve(true); });
-                }).catch(function (err) {
-                    reject(err);
+                var scenePrefix = '';
+                var scenePromise;
+                var checkSplitMode;
+                checkSplitMode = new Promise(function (splitPromise) {
+                    app_1.App.getGlobalProperty('splitmode').then(function (res) {
+                        if (res === '1' && !value) {
+                            scene_1.Scene.getActiveScene().then(function (val) {
+                                value = val;
+                                splitPromise(value);
+                            });
+                        }
+                        else {
+                            splitPromise(value);
+                        }
+                    });
+                });
+                checkSplitMode.then(function (value) {
+                    if (typeof value === 'number' || value instanceof scene_1.Scene) {
+                        scenePromise = new Promise(function (innerResolve, innerReject) {
+                            scene_1.Scene.getSceneCount().then(function (sceneCount) {
+                                if (typeof value === 'number') {
+                                    var int = Math.floor(value);
+                                    if (int > sceneCount || int === 0) {
+                                        innerReject(Error('Scene not existing.'));
+                                    }
+                                    else {
+                                        scenePrefix = 's:' + (int - 1) + '|';
+                                        innerResolve();
+                                    }
+                                }
+                                else {
+                                    value.getSceneNumber().then(function (int) {
+                                        if (int > sceneCount || int === 0) {
+                                            innerReject(Error('Scene not existing.'));
+                                        }
+                                        else {
+                                            scenePrefix = 's:' + (int - 1) + '|';
+                                            innerResolve();
+                                        }
+                                    });
+                                }
+                            });
+                        });
+                    }
+                    else if (typeof value === 'undefined') {
+                        scenePromise = Promise.resolve();
+                    }
+                    else {
+                        scenePromise = Promise.reject(Error('Optional parameter \'scene\' only accepts integers or an XJS.Scene object'));
+                    }
+                    scenePromise.then(function () {
+                        return _this.toXML();
+                    }).then(function (fileItem) {
+                        return app_1.App.callFunc(scenePrefix + 'additem', ' ' + fileItem);
+                    }).then(function () {
+                        resolve(true);
+                    }).catch(function (err) {
+                        reject(err);
+                    });
                 });
             }
         });
@@ -10239,7 +13710,7 @@ var VideoPlaylist = (function () {
     return VideoPlaylist;
 })();
 exports.VideoPlaylist = VideoPlaylist;
-},{"../core/environment":5,"../internal/app":38,"../internal/util/json":43,"../internal/util/xml":46,"../util/io":58}],56:[function(require,module,exports){
+},{"../core/environment":4,"../core/scene":23,"../internal/app":49,"../internal/util/json":56,"../internal/util/xml":60,"../util/io":72}],70:[function(require,module,exports){
 var Color = (function () {
     function Color(props) {
         if (props['rgb'] !== undefined) {
@@ -10253,6 +13724,9 @@ var Color = (function () {
         }
         else if (props['ibgr'] !== undefined) {
             this.setIbgr(props['ibgr']);
+        }
+        else if (props['isTransparent'] !== undefined && props['isTransparent'] === true) {
+            this.setTransparent();
         }
         else {
             throw new Error('Do not call Color constructor without parameters.');
@@ -10270,15 +13744,19 @@ var Color = (function () {
     Color.fromBGRInt = function (ibgr) {
         return new Color({ ibgr: ibgr });
     };
+    Color.fromTransparent = function () {
+        return new Color({ isTransparent: true });
+    };
     Color.prototype.getRgb = function () {
         return this._rgb;
     };
     Color.prototype.setRgb = function (rgb) {
-        this._rgb = rgb.replace(/^#/, '');
+        this._rgb = rgb.replace(/^#/, '').toUpperCase();
         this._irgb = parseInt(this._rgb, 16);
         this._bgr = [this._rgb.substring(4, 6), this._rgb.substring(2, 4),
-            this._rgb.substring(0, 2)].join('');
+            this._rgb.substring(0, 2)].join('').toUpperCase();
         this._ibgr = parseInt(this._bgr, 16);
+        this._transparent = false;
         return this;
     };
     Color.prototype.getBgr = function () {
@@ -10312,21 +13790,84 @@ var Color = (function () {
         this.setBgr(bgr);
         return this;
     };
+    Color.prototype.setTransparent = function () {
+        this._rgb = '0';
+        this._irgb = 0;
+        this._bgr = '0';
+        this._ibgr = 0;
+        this._transparent = true;
+        return this;
+    };
+    Color.prototype.isTransparent = function () {
+        return this._transparent;
+    };
     return Color;
 })();
 exports.Color = Color;
-},{}],57:[function(require,module,exports){
+},{}],71:[function(require,module,exports){
+var remote_1 = require('../internal/remote');
 // simple event emitter
 var EventEmitter = (function () {
     function EventEmitter() {
         this._handlers = {};
     }
     /** This function attaches a handler to an event. Duplicate handlers are allowed. */
-    EventEmitter.prototype.on = function (event, handler) {
-        if (this._handlers[event] === undefined) {
-            this._handlers[event] = [];
+    EventEmitter.prototype.on = function (event, handler, _id) {
+        if (remote_1.Remote.remoteType === 'remote') {
+            var id = _id ? _id : new Date().getTime() + '_' + Math.floor(Math.random() * 1000);
+            var message = {
+                event: event,
+                id: id,
+                type: 'event-emitter'
+            };
+            if (EventEmitter._remoteHandlers[id] === undefined) {
+                EventEmitter._remoteHandlers[id] = [];
+            }
+            EventEmitter._remoteHandlers[id].push(handler);
+            remote_1.Remote.sendMessage(encodeURIComponent(JSON.stringify(message)));
         }
-        this._handlers[event].push(handler);
+        else if (remote_1.Remote.remoteType === 'proxy') {
+            if (EventEmitter._proxyHandlers[_id] === undefined) {
+                EventEmitter._proxyHandlers[_id] = [];
+            }
+            EventEmitter._proxyHandlers[_id].push(handler);
+        }
+        else {
+            if (this._handlers[event] === undefined) {
+                this._handlers[event] = [];
+            }
+            this._handlers[event].push(handler);
+        }
+    };
+    /** This function removes a handler to an event.*/
+    EventEmitter.prototype.off = function (event, handler) {
+        if (remote_1.Remote.remoteType === 'remote') {
+            if (EventEmitter._remoteHandlers[event] !== undefined) {
+                for (var i = EventEmitter._remoteHandlers[event].length - 1; i >= 0; i--) {
+                    if (EventEmitter._remoteHandlers[event][i] === handler) {
+                        EventEmitter._remoteHandlers[event].splice(i, 1);
+                    }
+                }
+            }
+        }
+        else if (remote_1.Remote.remoteType === 'proxy') {
+            if (EventEmitter._proxyHandlers[event] !== undefined) {
+                for (var i = EventEmitter._proxyHandlers[event].length - 1; i >= 0; i--) {
+                    if (EventEmitter._proxyHandlers[event][i] === handler) {
+                        EventEmitter._proxyHandlers[event].splice(i, 1);
+                    }
+                }
+            }
+        }
+        else {
+            if (this._handlers[event] !== undefined) {
+                for (var i = this._handlers[event].length - 1; i >= 0; i--) {
+                    if (this._handlers[event][i] === handler) {
+                        this._handlers[event].splice(i, 1);
+                    }
+                }
+            }
+        }
     };
     /** This function lets an event trigger with any number of supplied parameters. */
     EventEmitter.prototype.emit = function (event) {
@@ -10334,20 +13875,65 @@ var EventEmitter = (function () {
         for (var _i = 1; _i < arguments.length; _i++) {
             params[_i - 1] = arguments[_i];
         }
-        if (this._handlers[event] === undefined) {
-            return;
+        if (remote_1.Remote.remoteType === 'proxy') {
+            if (EventEmitter._proxyHandlers[event] === undefined) {
+                return;
+            }
+            for (var _a = 0, _b = EventEmitter._proxyHandlers[event]; _a < _b.length; _a++) {
+                var handler = _b[_a];
+                handler.apply(this, params);
+            }
         }
-        for (var _a = 0, _b = this._handlers[event]; _a < _b.length; _a++) {
-            var handler = _b[_a];
-            handler.apply(this, params);
+        else if (remote_1.Remote.remoteType === 'remote') {
+            if (EventEmitter._remoteHandlers[event] === undefined)
+                return;
+            for (var _c = 0, _d = EventEmitter._remoteHandlers[event]; _c < _d.length; _c++) {
+                var handler = _d[_c];
+                handler.apply(this, params);
+            }
+        }
+        else {
+            if (this._handlers[event] === undefined) {
+                return;
+            }
+            for (var _e = 0, _f = this._handlers[event]; _e < _f.length; _e++) {
+                var handler = _f[_e];
+                handler.apply(this, params);
+            }
         }
     };
+    EventEmitter._setCallback = function (message) {
+        return new Promise(function (resolve) {
+            if (EventEmitter._proxyHandlers[message[0]] === undefined) {
+                EventEmitter._proxyHandlers[message[0]] = [];
+            }
+            resolve(EventEmitter._proxyHandlers[message[0]].push(message[1]));
+        });
+    };
+    EventEmitter._finalCallback = function (message) {
+        var _this = this;
+        return new Promise(function (resolve) {
+            var result = JSON.parse(decodeURIComponent(message));
+            if (EventEmitter._remoteHandlers[result['id']] !== undefined) {
+                for (var _i = 0, _a = EventEmitter._remoteHandlers[result['id']]; _i < _a.length; _i++) {
+                    var handler = _a[_i];
+                    handler.apply(_this, [result['result']]);
+                }
+            }
+            resolve();
+        });
+    };
+    EventEmitter._remoteHandlers = {};
+    EventEmitter._proxyHandlers = {};
     return EventEmitter;
 })();
 exports.EventEmitter = EventEmitter;
-},{}],58:[function(require,module,exports){
+},{"../internal/remote":55}],72:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var internal_1 = require('../internal/internal');
+var environment_1 = require('../core/environment');
+var remote_1 = require('../internal/remote');
+var window_1 = require('./window');
 var IO = (function () {
     function IO() {
     }
@@ -10400,7 +13986,11 @@ var IO = (function () {
      *
      */
     IO.openUrl = function (url) {
-        internal_1.exec('OpenUrl', url);
+        return new Promise(function (resolve) {
+            internal_1.exec('OpenUrl', url).then(function (res) {
+                resolve(res);
+            });
+        });
     };
     /**
      * param: ([options] [, filter]) -- see below
@@ -10425,50 +14015,42 @@ var IO = (function () {
      */
     IO.openFileDialog = function (optionBag, filter) {
         return new Promise(function (resolve, reject) {
-            var flags = 0;
-            if (optionBag !== undefined && optionBag !== null) {
-                if (optionBag.allowMultiSelect === true) {
-                    flags = flags | IO._ALLOW_MULTI_SELECT;
-                }
-                if (optionBag.fileMustExist === true) {
-                    flags = flags | IO._FILE_MUST_EXIST;
-                }
-                if (optionBag.forceShowHidden === true) {
-                    flags = flags | IO._FORCE_SHOW_HIDDEN;
-                }
+            if (environment_1.Environment.isSourcePlugin()) {
+                reject(Error('function is not available for source'));
             }
-            var filterString = '';
-            if (filter !== undefined && filter !== null &&
-                filter.name !== undefined && filter.extensions !== undefined) {
-                filterString = filter.name + '|';
-                filterString += (filter.extensions.map(function (val) {
-                    return '*.' + val;
-                })).join(';');
-                filterString += '||';
+            else {
+                var flags = 0;
+                if (optionBag !== undefined && optionBag !== null) {
+                    if (optionBag.allowMultiSelect === true) {
+                        flags = flags | IO._ALLOW_MULTI_SELECT;
+                    }
+                    if (optionBag.fileMustExist === true) {
+                        flags = flags | IO._FILE_MUST_EXIST;
+                    }
+                    if (optionBag.forceShowHidden === true) {
+                        flags = flags | IO._FORCE_SHOW_HIDDEN;
+                    }
+                }
+                var filterString = '';
+                if (filter !== undefined && filter !== null &&
+                    filter.name !== undefined && filter.extensions !== undefined) {
+                    filterString = filter.name + '|';
+                    filterString += (filter.extensions.map(function (val) {
+                        return '*.' + val;
+                    })).join(';');
+                    filterString += '||';
+                }
+                internal_1.exec('OpenFileDialogAsync', null, null, String(flags), filterString, function (path) {
+                    if (path !== 'null') {
+                        resolve(path.split('|'));
+                    }
+                    else {
+                        reject(Error('File selection cancelled.'));
+                    }
+                });
             }
-            internal_1.exec('OpenFileDialogAsync', null, null, String(flags), filterString, function (path) {
-                if (path !== 'null') {
-                    resolve(path.split('|'));
-                }
-                else {
-                    reject(Error('File selection cancelled.'));
-                }
-            });
         });
     };
-    IO.getVideoDuration = function (file) {
-        return new Promise(function (resolve, reject) {
-            if (IO._callback[file] === undefined) {
-                IO._callback[file] = [];
-            }
-            IO._callback[file].push({ resolve: resolve, reject: reject });
-            internal_1.exec('GetVideoDuration', file);
-        });
-    };
-    ;
-    IO._ALLOW_MULTI_SELECT = 0x200;
-    IO._FILE_MUST_EXIST = 0x1000;
-    IO._FORCE_SHOW_HIDDEN = 0x10000000;
     /**
      * param: (file: string)
      *
@@ -10477,42 +14059,173 @@ var IO = (function () {
      * Returns the duration of a video file on the local system, specified in
      * units of 10^-7 seconds.
      */
+    IO.getVideoDuration = function (file) {
+        return new Promise(function (resolve, reject) {
+            if (environment_1.Environment.isSourcePlugin()) {
+                reject(Error('function is not available for source'));
+            }
+            else {
+                if (typeof file !== 'undefined') {
+                    if (remote_1.Remote.remoteType === 'remote') {
+                        var message = {
+                            file: file,
+                            type: 'window'
+                        };
+                        if (IO._remoteCallback[file] === undefined) {
+                            IO._remoteCallback[file] = [];
+                        }
+                        IO._remoteCallback[file].push({ resolve: resolve, reject: reject });
+                        remote_1.Remote.sendMessage(encodeURIComponent(JSON.stringify(message)));
+                    }
+                    else if (remote_1.Remote.remoteType === 'proxy') {
+                        if (IO._proxyCallback[file[0]] === undefined) {
+                            IO._proxyCallback[file[0]] = [];
+                        }
+                        IO._proxyCallback[file[0]].push(file[1]);
+                        internal_1.exec('GetVideoDuration', file[0]);
+                    }
+                    else {
+                        if (IO._callback[file] === undefined) {
+                            IO._callback[file] = [];
+                        }
+                        IO._callback[file].push({ resolve: resolve, reject: reject });
+                        internal_1.exec('GetVideoDuration', file);
+                    }
+                }
+                else {
+                    reject(Error('No file indicated.'));
+                }
+            }
+        });
+    };
+    ;
+    IO._finalCallback = function (message) {
+        return new Promise(function (resolve) {
+            var result = JSON.parse(decodeURIComponent(message));
+            if (result['result'] !== undefined) {
+                IO._remoteCallback[result['file']].shift().resolve(result['result']);
+            }
+            else {
+                IO._remoteCallback[decodeURIComponent(result['file'])].shift().reject(Error('Invalid file path.'));
+            }
+        });
+    };
+    IO._ALLOW_MULTI_SELECT = 0x200;
+    IO._FILE_MUST_EXIST = 0x1000;
+    IO._FORCE_SHOW_HIDDEN = 0x10000000;
     IO._callback = {};
+    IO._remoteCallback = {};
+    IO._proxyCallback = {};
     return IO;
 })();
 exports.IO = IO;
-window.OnGetVideoDuration = function (file, duration) {
-    IO._callback[decodeURIComponent(file)].shift().resolve(duration);
-    if (IO._callback[decodeURIComponent(file)].length === 0) {
-        delete IO._callback[decodeURIComponent(file)];
+var oldOnGetVideoDuration = window_1.default.OnGetVideoDuration;
+window_1.default.OnGetVideoDuration = function (file, duration) {
+    if (remote_1.Remote.remoteType === 'proxy') {
+        IO._proxyCallback[decodeURIComponent(file)][0].apply(this, [Number(duration), file]);
+    }
+    else {
+        IO._callback[decodeURIComponent(file)].shift().resolve(Number(duration));
+        if (IO._callback[decodeURIComponent(file)].length === 0) {
+            delete IO._callback[decodeURIComponent(file)];
+        }
+    }
+    if (typeof oldOnGetVideoDuration === 'function') {
+        oldOnGetVideoDuration(file, duration);
     }
 };
-window.OnGetVideoDurationFailed = function (file) {
-    IO._callback[decodeURIComponent(file)].shift().reject(Error('Invalid file path.'));
-    if (IO._callback[decodeURIComponent(file)].length === 0) {
-        delete IO._callback[decodeURIComponent(file)];
+var oldOnGetVideoDurationFailed = window_1.default.OnGetVideoDurationFailed;
+window_1.default.OnGetVideoDurationFailed = function (file) {
+    if (remote_1.Remote.remoteType === 'proxy') {
+        IO._proxyCallback[decodeURIComponent(file)][0].apply(this, [undefined, file]);
+    }
+    else {
+        IO._callback[decodeURIComponent(file)].shift().reject(Error('Invalid file path.'));
+        if (IO._callback[decodeURIComponent(file)].length === 0) {
+            delete IO._callback[decodeURIComponent(file)];
+        }
+    }
+    if (typeof oldOnGetVideoDurationFailed === 'function') {
+        oldOnGetVideoDuration(file);
     }
 };
-},{"../internal/internal":41}],59:[function(require,module,exports){
+},{"../core/environment":4,"../internal/internal":53,"../internal/remote":55,"./window":75}],73:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
+var version_1 = require('../internal/util/version');
+var init_1 = require('../internal/init');
+var remote_1 = require('../internal/remote');
+var environment_1 = require('../core/environment');
+var channelmanager_1 = require('../core/channelmanager');
 var isReady = false;
-var readyPromise = new Promise(function (resolve) {
-    document.addEventListener('xsplit-js-ready', function () {
-        resolve();
+var isInit = false;
+var readyResolve;
+function readyPromise() {
+    return new Promise(function (resolve) {
+        if (typeof document !== 'undefined') {
+            document.addEventListener('xsplit-js-ready', function () {
+                resolve();
+            });
+        }
+        if (isReady) {
+            resolve();
+        }
     });
-    if (isReady) {
-        resolve();
-    }
-});
-function ready() {
-    return readyPromise;
+}
+function finishReady(config) {
+    var _this = this;
+    return new Promise(function (resolve) {
+        if (config && config['version'] !== undefined) {
+            version_1.setMockVersion(config['version']);
+        }
+        setReady();
+        if (isReady && !isInit) {
+            channelmanager_1._subscribeEventManager();
+            setOnce();
+            init_1.default();
+        }
+        if (readyResolve !== undefined && remote_1.Remote.remoteType === 'remote') {
+            readyResolve.call(_this, null);
+        }
+        resolve(readyPromise);
+    });
+}
+exports.finishReady = finishReady;
+function ready(config) {
+    return new Promise(function (resolve, reject) {
+        environment_1.Environment.initialize();
+        if (config && config['remote'] !== undefined) {
+            if (config['remote']['type'] !== undefined) {
+                remote_1.Remote.remoteType = config['remote']['type'];
+            }
+            if (config['remote']['sendMessage'] !== undefined
+                && config['remote']['sendMessage'] instanceof Function) {
+                remote_1.Remote.sendMessage = config['remote']['sendMessage'];
+            }
+            else {
+                reject(Error('Send message should be instance of function.'));
+            }
+        }
+        if (remote_1.Remote.remoteType === 'remote') {
+            // Create a callback that would resolve ready()
+            // Resolve ready() for Remote once finishReady was already called.
+            readyResolve = function () { resolve(); };
+            remote_1.Remote.sendMessage('getVersion');
+        }
+        else {
+            resolve(finishReady(config));
+        }
+    });
 }
 exports.ready = ready;
 function setReady() {
     isReady = true;
 }
 exports.setReady = setReady;
-},{}],60:[function(require,module,exports){
+function setOnce() {
+    isInit = true;
+}
+exports.setOnce = setOnce;
+},{"../core/channelmanager":2,"../core/environment":4,"../internal/init":52,"../internal/remote":55,"../internal/util/version":59}],74:[function(require,module,exports){
 /**
  *  The Rectangle class is a utility class used in many different parts of the
  *  framework. Please note that there are cases where the framework uses
@@ -10683,7 +14396,7 @@ var Rectangle = (function () {
      *  left, top, right, bottom.
      */
     Rectangle.prototype.toCoordinateString = function () {
-        if (this._left === undefined) {
+        if ([this._left, this._right, this._top, this._bottom].indexOf(undefined) > -1) {
             throw new Error('This Rectangle instance does not have coordinates.');
         }
         else {
@@ -10729,7 +14442,24 @@ var Rectangle = (function () {
     return Rectangle;
 })();
 exports.Rectangle = Rectangle;
-},{}],61:[function(require,module,exports){
+},{}],75:[function(require,module,exports){
+(function (global){
+var win = {};
+if (typeof window !== 'undefined') {
+    win = window;
+}
+else if (typeof global !== 'undefined') {
+    win = global;
+}
+else if (typeof self !== 'undefined') {
+    win = self;
+}
+else {
+    win = {};
+}
+exports.default = win;
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],76:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -10737,8 +14467,10 @@ var __extends = (this && this.__extends) || function (d, b) {
     __.prototype = b.prototype;
     d.prototype = new __();
 };
+var environment_1 = require('../core/environment');
 var eventemitter_1 = require('../util/eventemitter');
 var internal_1 = require('../internal/internal');
+var remote_1 = require('../internal/remote');
 /** This utility class exposes functionality for source plugin developers to
  *  handle the properties window for their source plugins. The framework also
  *  uses this class for its own internal purposes.
@@ -10762,31 +14494,39 @@ var SourcePropsWindow = (function (_super) {
     function SourcePropsWindow() {
         var _this = this;
         _super.call(this);
-        window.addEventListener('message', function (event) {
-            try {
-                var data = JSON.parse(event.data);
-            }
-            catch (e) {
-                // syntax error probably happened, exit gracefully
-                return;
-            }
-            switch (data.event) {
-                // currently, restrict messages to selected set
-                case 'set-selected-tab':
-                    this.emit(data.event, data.value);
-                    break;
-                case 'async-callback':
-                    this.emit(data.event, {
-                        asyncId: data.value.asyncId,
-                        result: data.value.result
-                    });
-                    break;
-            }
-        }.bind(this));
-        this.on('config-load', function () {
-            _this._informConfigLoaded();
-        });
-        SourcePropsWindow._instance = this;
+        if (!environment_1.Environment.isSourceProps()) {
+            throw new Error('SourcePropsWindow class is only available for source properties');
+        }
+        if (remote_1.Remote.remoteType === 'remote') {
+            throw new Error("Unable to listen to SourcePropsWindow events through Remote");
+        }
+        else {
+            window.addEventListener('message', function (event) {
+                try {
+                    var data = JSON.parse(event.data);
+                }
+                catch (e) {
+                    // syntax error probably happened, exit gracefully
+                    return;
+                }
+                switch (data.event) {
+                    // currently, restrict messages to selected set
+                    case 'set-selected-tab':
+                        this.emit(data.event, data.value);
+                        break;
+                    case 'async-callback':
+                        this.emit(data.event, {
+                            asyncId: data.value.asyncId,
+                            result: data.value.result
+                        });
+                        break;
+                }
+            }.bind(this));
+            this.on('config-load', function () {
+                _this._informConfigLoaded();
+            });
+            SourcePropsWindow._instance = this;
+        }
     }
     /**
      *  Gets the instance of the window utility. Use this instead of the constructor.
@@ -10885,7 +14625,9 @@ var SourcePropsWindow = (function (_super) {
     ;
     /** Closes the properties window. */
     SourcePropsWindow.prototype.close = function () {
-        internal_1.exec('Close');
+        return new Promise(function (resolve) {
+            resolve(internal_1.exec('Close'));
+        });
     };
     ;
     SourcePropsWindow._MODE_FULL = 'full';
@@ -10893,12 +14635,16 @@ var SourcePropsWindow = (function (_super) {
     return SourcePropsWindow;
 })(eventemitter_1.EventEmitter);
 exports.SourcePropsWindow = SourcePropsWindow;
-},{"../internal/internal":41,"../util/eventemitter":57}],62:[function(require,module,exports){
+},{"../core/environment":4,"../internal/internal":53,"../internal/remote":55,"../util/eventemitter":71}],77:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 /// <reference path="../../defs/object.d.ts" />
+/// <reference path="../../defs/proxy.d.ts" />
 var rectangle_1 = require('../util/rectangle');
 var environment_1 = require('../core/environment');
 var internal_1 = require('../internal/internal');
+var remote_1 = require('../internal/remote');
+var window_1 = require('../util/window');
+var dialogProxy;
 /**
  *  This class is used to spawn new browser processes that can be used to open
  *  other URLs. Source plugins do not have this functionality (but their
@@ -10925,10 +14671,11 @@ var internal_1 = require('../internal/internal');
  *      .setTitle('ThisDialogReturnsAString')
  *      .setBorderOptions(true, false)
  *      .setButtons(true, true)
- *      .show()
- *      .getResult().then(function(result) {
- *        document.getElementById('input').value = result;
- *      });
+ *      .show(function(dialog) {
+ *        dialog.getResult().then(function(result) {
+ *          document.getElementById('input').value = result;
+ *        });
+ *      })
  *    });
  *  });
  *
@@ -10944,11 +14691,19 @@ var Dialog = (function () {
             throw new Error('Dialogs are not available for source plugins.');
         }
         else {
+            if (remote_1.Remote.remoteType === 'remote') {
+                throw new Error('Unable to listen to Dialog window events through Remote');
+            }
             this._result = null;
             var eventListener = function (e) {
                 // self-deleting event listener
                 e.target.removeEventListener(e.type, eventListener);
-                _this._result = e.detail;
+                if (typeof dialogProxy !== 'undefined' && typeof Proxy !== 'undefined') {
+                    dialogProxy._result = e.detail;
+                }
+                else {
+                    _this._result = e.detail;
+                }
                 _this._resultListener = null;
             };
             document.addEventListener('xsplit-dialog-result', eventListener);
@@ -10982,7 +14737,7 @@ var Dialog = (function () {
      * *Chainable.*
      */
     Dialog.createAutoDialog = function (url) {
-        if (environment_1.Environment.isSourceConfig()) {
+        if (environment_1.Environment.isSourceProps()) {
             throw new Error('Auto dialogs are not available for config windows.');
         }
         else {
@@ -11006,10 +14761,17 @@ var Dialog = (function () {
      *  ```
      */
     Dialog.return = function (result) {
-        if (result !== undefined) {
-            internal_1.exec('SetDialogResult', result);
-        }
-        internal_1.exec('Close');
+        return new Promise(function (resolve) {
+            if (result !== undefined) {
+                internal_1.exec('SetDialogResult', result).then(function (res) {
+                    resolve(res);
+                    internal_1.exec('Close');
+                });
+            }
+            else {
+                resolve(internal_1.exec('Close'));
+            }
+        });
     };
     /**
      *  param: (width: number, height: number)
@@ -11081,23 +14843,30 @@ var Dialog = (function () {
         return this;
     };
     /**
-     *  return: Dialog
+     *  return: Promise<Dialog>
      *
      *  After configuring the dialog, call this function to spawn it.
      *
      * *Chainable.*
      */
     Dialog.prototype.show = function () {
-        this._result = null;
-        if (this._autoclose) {
-            internal_1.exec('NewAutoDialog', this._url, '', this._size === undefined ?
-                undefined : (this._size.getWidth() + ',' + this._size.getHeight()));
-        }
-        else {
-            internal_1.exec('NewDialog', this._url, '', this._size === undefined ?
-                undefined : (this._size.getWidth() + ',' + this._size.getHeight()), this._calculateFlags(), this._title);
-        }
-        return this;
+        var _this = this;
+        return new Promise(function (resolve) {
+            _this._result = null;
+            if (_this._autoclose) {
+                internal_1.exec('NewAutoDialog', _this._url, '', _this._size === undefined ?
+                    undefined : (_this._size.getWidth() + ',' +
+                    _this._size.getHeight())).then(function (result) {
+                    resolve(_this);
+                });
+            }
+            else {
+                internal_1.exec('NewDialog', _this._url, '', _this._size === undefined ?
+                    undefined : (_this._size.toDimensionString()), _this._calculateFlags(), _this._title).then(function (result) {
+                    resolve(_this);
+                });
+            }
+        });
     };
     /**
      *  return: Promise<string>
@@ -11121,7 +14890,7 @@ var Dialog = (function () {
                 document.addEventListener('xsplit-dialog-result', eventListener);
                 _this._resultListener = eventListener;
             }
-            else {
+            else if (typeof Proxy === 'undefined') {
                 Object.observe(_this, function (changes) {
                     // Search for changes with the name as result
                     var change = changes.filter(function (elem) {
@@ -11132,13 +14901,26 @@ var Dialog = (function () {
                     }
                 });
             }
+            else {
+                dialogProxy = new Proxy(_this, {
+                    set: function (target, property, value, receiver) {
+                        if (property === '_result') {
+                            _this._result = value;
+                            resolve(value);
+                        }
+                        return true;
+                    }
+                });
+            }
         });
     };
     /**
      *  Closes the dialog that this window spawned.
      */
     Dialog.prototype.close = function () {
-        internal_1.exec('CloseDialog');
+        return new Promise(function (resolve) {
+            resolve(internal_1.exec('CloseDialog'));
+        });
     };
     Dialog.prototype._calculateFlags = function () {
         var flags = 0;
@@ -11162,13 +14944,17 @@ var Dialog = (function () {
     return Dialog;
 })();
 exports.Dialog = Dialog;
-if (environment_1.Environment.isSourceConfig() || environment_1.Environment.isExtension()) {
-    window.OnDialogResult = function (result) {
+var oldOnDialogResult = window_1.default.OnDialogResult;
+window_1.default.OnDialogResult = function (result) {
+    if (environment_1.Environment.isSourceProps() || environment_1.Environment.isExtension()) {
         document.dispatchEvent(new CustomEvent('xsplit-dialog-result', {
             detail: result }));
-    };
-}
-},{"../core/environment":5,"../internal/internal":41,"../util/rectangle":60}],63:[function(require,module,exports){
+    }
+    if (typeof oldOnDialogResult === 'function') {
+        oldOnDialogResult(result);
+    }
+};
+},{"../core/environment":4,"../internal/internal":53,"../internal/remote":55,"../util/rectangle":74,"../util/window":75}],78:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -11178,17 +14964,27 @@ var __extends = (this && this.__extends) || function (d, b) {
 };
 var environment_1 = require('../core/environment');
 var eventemitter_1 = require('../util/eventemitter');
+var eventmanager_1 = require('../internal/eventmanager');
+var json_1 = require('../internal/util/json');
+var scene_1 = require('../core/scene');
+var version_1 = require('../internal/util/version');
 var internal_1 = require('../internal/internal');
 var app_1 = require('../internal/app');
+var item_1 = require('../core/items/item');
+var extension_1 = require('../core/extension');
+var window_1 = require('../util/window');
 var _RESIZE = '2';
 /** This utility class represents the extension window. It allows manipulation
  *  of the window (e.g., resizing), and also serves as an event emitter
  *  for all events that the window should be able to handle.
  *
  *  Currently, the following events are available:
- *    - `scene-load`: notifies in the event of a scene change. Handler is a function f(sceneNumber: number)
+ *    - `scene-load`: notifies in the event of a scene change. Handler is a function f(sceneNumber: number). For Split Mode `scene-load` listens to the changes on the preview window.
  *    - `sources-list-highlight`: notifies when a user hovers over a source in the stage, returning its source id, or when the mouse moves out of a source bounding box, returning null. Source id is also returned when hovering over the bottom panel. Handler is a function f(id: string)
- *    - `sources-list-select`: notifies when a user clicks a source in the stage. Handler is a function f(id: string)
+ *    - `sources-list-select`: notifies when a user clicks a source in the stage. Source id is also returned when source is selected from the bottom panel. Handler is a function f(id: string)
+ *    - `sources-list-update`: notifies when there are changes on list sources whether on stage or bottom panel. Handler is a function(ids: string) where ids are comma separated source ids.
+ *    - `scene-delete` : notifies when a user deletes a scene. Handler is a function f(index: number). Works only on version 2.8.1606.1601 or higher.
+ *    - `scene-add` : notifies when a user adds a scene. Handler is a function f(index: number). Works only on version 2.8.1606.1701 or higher.
  *
  *  Use the `on(event: string, handler: Function)` function to listen to an event.
  *
@@ -11196,14 +14992,23 @@ var _RESIZE = '2';
 var ExtensionWindow = (function (_super) {
     __extends(ExtensionWindow, _super);
     /**
-     *  Use getInstance() instead.
+     *  ** For Deprecation
+     *
+     *  Use getInstance()
      */
     function ExtensionWindow() {
         _super.call(this);
+        if (!environment_1.Environment.isExtension()) {
+            throw new Error('ExtensionWindow class is only available for extensions');
+        }
         ExtensionWindow._instance = this;
+        ExtensionWindow._subscriptions = [];
     }
     /**
-     *  Gets the instance of the window utility. Use this instead of the constructor.
+     * ** For deprecation, the need for getting the instance of an ExtensionWindow looks redundant,
+     * `** since an ExtensionWinow should technically have a single instance`
+     *
+     * Gets the instance of the window utility. Use this instead of the constructor.
      */
     ExtensionWindow.getInstance = function () {
         if (ExtensionWindow._instance === undefined) {
@@ -11211,9 +15016,116 @@ var ExtensionWindow = (function (_super) {
         }
         return ExtensionWindow._instance;
     };
+    /**
+     *  param: (event: string, ...params: any[])
+     *
+     *  Allows this class to emit an event.
+     */
+    ExtensionWindow.emit = function (event) {
+        var params = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            params[_i - 1] = arguments[_i];
+        }
+        params.unshift(event);
+        try {
+            ExtensionWindow
+                .getInstance()
+                .emit
+                .apply(ExtensionWindow._instance, params);
+        }
+        catch (event) {
+            ExtensionWindow
+                ._instance
+                .emit
+                .apply(ExtensionWindow._instance, params);
+        }
+    };
+    /**
+     *  param: (event: string, handler: Function)
+     *
+     *  Allows listening to events that this class emits.
+     *
+     */
+    ExtensionWindow.on = function (event, handler) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            var id = new Date().getTime() + '_' + Math.floor(Math.random() * 1000);
+            ExtensionWindow.getInstance().on(event, handler, id);
+            var isDeleteSceneEventFixed = version_1.versionCompare(version_1.getVersion()).
+                is.greaterThanOrEqualTo(version_1.deleteSceneEventFixVersion);
+            var isAddSceneEventFixed = version_1.versionCompare(version_1.getVersion()).
+                is.greaterThanOrEqualTo(version_1.addSceneEventFixVersion);
+            if (event === 'scene-delete' && isDeleteSceneEventFixed) {
+                if (ExtensionWindow._subscriptions.indexOf('SceneDeleted') < 0) {
+                    ExtensionWindow._subscriptions.push('SceneDeleted');
+                    eventmanager_1.EventManager.subscribe('SceneDeleted', function (settingsObj) {
+                        if (environment_1.Environment.isExtension()) {
+                            ExtensionWindow.emit(settingsObj['id'] ? settingsObj['id'] : event, settingsObj['index'] === '' ?
+                                null : Number(settingsObj['index']) + 1);
+                        }
+                        resolve(this);
+                    }, id);
+                }
+                else {
+                    resolve(_this);
+                }
+            }
+            else if (event === 'scene-add' && isAddSceneEventFixed) {
+                if (ExtensionWindow._subscriptions.indexOf('OnSceneAddByUser') < 0) {
+                    ExtensionWindow._subscriptions.push('OnSceneAddByUser');
+                    eventmanager_1.EventManager.subscribe('OnSceneAddByUser', function (settingsObj) {
+                        scene_1.Scene.getSceneCount().then(function (count) {
+                            if (environment_1.Environment.isExtension()) {
+                                ExtensionWindow.emit(settingsObj['id'] ? settingsObj['id'] : event, count);
+                                resolve(this);
+                            }
+                            else {
+                                reject(Error('ExtensionWindow class is only available for extensions.'));
+                            }
+                        });
+                    }, id);
+                }
+                else {
+                    resolve(_this);
+                }
+            }
+            else if (['sources-list-highlight', 'sources-list-select',
+                'sources-list-update', 'scene-load'].indexOf(event) >= 0) {
+                //Just subscribe to the event. Emitter is already handled.
+                if (['sources-list-highlight', 'sources-list-select',
+                    'sources-list-update'].indexOf(event) >= 0) {
+                    app_1.App.getGlobalProperty('splitmode').then(function (split) {
+                        var view = split === '1' ? item_1.ViewTypes.PREVIEW : item_1.ViewTypes.MAIN;
+                        try {
+                            internal_1.exec('SourcesListSubscribeEvents', view.toString()).then(function (res) {
+                                resolve(_this);
+                            });
+                        }
+                        catch (ex) {
+                        }
+                    });
+                }
+                else {
+                    resolve(_this);
+                }
+            }
+            else {
+                reject(Error('Warning! The event "' + event + '" is not yet supported.'));
+            }
+        });
+    };
+    ExtensionWindow.off = function (event, handler) {
+        ExtensionWindow.getInstance().off(event, handler);
+    };
     /** param: (width: number, height: number)
      *
      *  Resizes this extension's window.
+     */
+    ExtensionWindow.resize = function (width, height) {
+        app_1.App.postMessage(_RESIZE, String(width), String(height));
+    };
+    /**
+     * `** For deprecation, please use the static method instead`
      */
     ExtensionWindow.prototype.resize = function (width, height) {
         app_1.App.postMessage(_RESIZE, String(width), String(height));
@@ -11223,9 +15135,31 @@ var ExtensionWindow = (function (_super) {
      *
      * Renames the extension window.
      */
+    ExtensionWindow.setTitle = function (value) {
+        return new Promise(function (resolve) {
+            var ext = extension_1.Extension.getInstance();
+            ext.getId().then(function (id) {
+                internal_1.exec("CallHost", "setExtensionWindowTitle:" + id, value)
+                    .then(function (res) {
+                    resolve(res);
+                });
+            });
+        });
+    };
+    ;
+    /**
+     * `** For deprecation, please use the static method instead`
+     */
     ExtensionWindow.prototype.setTitle = function (value) {
-        ExtensionWindow._value = value;
-        app_1.App.postMessage("8");
+        return new Promise(function (resolve) {
+            var ext = extension_1.Extension.getInstance();
+            ext.getId().then(function (id) {
+                internal_1.exec("CallHost", "setExtensionWindowTitle:" + id, value)
+                    .then(function (res) {
+                    resolve(res);
+                });
+            });
+        });
     };
     ;
     /**
@@ -11233,7 +15167,7 @@ var ExtensionWindow = (function (_super) {
      *
      * Modifies this extension's window border.
      *
-     * "4" is th e base command on setting border flags.
+     * '4' is th e base command on setting border flags.
      *
      * Flags can be:
      *     (bit 0 - enable border)
@@ -11242,53 +15176,122 @@ var ExtensionWindow = (function (_super) {
      *     (bit 3 - enable minimize btn)
      *     (bit 4 - enable maximize btn)
      */
+    ExtensionWindow.setBorder = function (flag) {
+        app_1.App.postMessage('4', String(flag));
+    };
+    /**
+     * `** For deprecation, please use the static method instead`
+     * */
     ExtensionWindow.prototype.setBorder = function (flag) {
-        app_1.App.postMessage("4", String(flag));
+        app_1.App.postMessage('4', String(flag));
     };
     /**
      * Closes this extension window
      */
+    ExtensionWindow.close = function () {
+        app_1.App.postMessage('1');
+    };
+    /**
+     * `** For deprecation, please use the static method instead`
+     * */
     ExtensionWindow.prototype.close = function () {
-        app_1.App.postMessage("1");
+        app_1.App.postMessage('1');
     };
     /**
      * Disable Close Button on this extension's window
      */
+    ExtensionWindow.disableClose = function () {
+        app_1.App.postMessage('5', '0');
+    };
+    /**
+     * `** For deprecation, please use the static method instead`
+     * */
     ExtensionWindow.prototype.disableClose = function () {
-        app_1.App.postMessage("5", "0");
+        app_1.App.postMessage('5', '0');
     };
     /**
      * Enable Close Button on this extension's window
      */
-    ExtensionWindow.prototype.enableClose = function () {
-        app_1.App.postMessage("5", "1");
+    ExtensionWindow.enableClose = function () {
+        app_1.App.postMessage('5', '1');
     };
+    /**
+     * `** For deprecation, please use the static method instead`
+     * */
+    ExtensionWindow.prototype.enableClose = function () {
+        app_1.App.postMessage('5', '1');
+    };
+    ExtensionWindow._subscriptions = [];
     return ExtensionWindow;
 })(eventemitter_1.EventEmitter);
 exports.ExtensionWindow = ExtensionWindow;
-if (environment_1.Environment.isExtension()) {
-    window.Setid = function (id) {
-        internal_1.exec("CallHost", "setExtensionWindowTitle:" + id, ExtensionWindow._value);
-    };
-    window.OnSceneLoad = function (view, scene) {
-        if (Number(view) === 0) {
-            ExtensionWindow.getInstance().emit('scene-load', Number(scene));
+// for extensions
+var oldSourcesListUpdate = window_1.default.SourcesListUpdate;
+window_1.default.SourcesListUpdate = function (view, sources) {
+    app_1.App.getGlobalProperty('splitmode').then(function (res) {
+        var checkSplit = res === '1' ? 1 : 0;
+        if (Number(view) === checkSplit) {
+            var propsJSON = json_1.JSON.parse(decodeURIComponent(sources)), propsArr = [], ids = [];
+            if (propsJSON.children && propsJSON.children.length > 0) {
+                propsArr = propsJSON.children;
+                for (var i = 0; i < propsArr.length; i++) {
+                    ids.push(propsArr[i]['id']);
+                }
+            }
+            ExtensionWindow.emit('sources-list-update', ids.join(','));
         }
-    };
-    window.SourcesListHighlight = function (view, id) {
-        if (view === 0) {
-            ExtensionWindow.getInstance().emit('sources-list-highlight', id === '' ?
+        if (typeof oldSourcesListUpdate === 'function') {
+            oldSourcesListUpdate(view, sources);
+        }
+    });
+};
+var oldSourcesListHighlight = window_1.default.SourcesListHighlight;
+window_1.default.SourcesListHighlight = function (view, id) {
+    app_1.App.getGlobalProperty('splitmode').then(function (res) {
+        var checkSplit = res === '1' ? 1 : 0;
+        if (Number(view) === checkSplit) {
+            ExtensionWindow.emit('sources-list-highlight', id === '' ?
                 null : id);
         }
-    };
-    window.SourcesListSelect = function (view, id) {
-        if (view === 0) {
-            ExtensionWindow.getInstance().emit('sources-list-select', id === '' ?
+        if (typeof oldSourcesListHighlight === 'function') {
+            oldSourcesListHighlight(view, id);
+        }
+    });
+};
+var oldSourcesListSelect = window_1.default.SourcesListSelect;
+window_1.default.SourcesListSelect = function (view, id) {
+    app_1.App.getGlobalProperty('splitmode').then(function (res) {
+        var checkSplit = res === '1' ? 1 : 0;
+        if (Number(view) === checkSplit) {
+            ExtensionWindow.emit('sources-list-select', id === '' ?
                 null : id);
         }
-    };
-}
-},{"../core/environment":5,"../internal/app":38,"../internal/internal":41,"../util/eventemitter":57}],64:[function(require,module,exports){
+        if (typeof oldSourcesListSelect === 'function') {
+            oldSourcesListSelect(view, id);
+        }
+    });
+};
+var oldOnSceneLoad = window_1.default.OnSceneLoad;
+window_1.default.OnSceneLoad = function () {
+    var args = [];
+    for (var _i = 0; _i < arguments.length; _i++) {
+        args[_i - 0] = arguments[_i];
+    }
+    app_1.App.getGlobalProperty('splitmode').then(function (res) {
+        if (environment_1.Environment.isExtension()) {
+            var view = args[0];
+            var scene = args[1];
+            var checkSplit = res === '1' ? 1 : 0;
+            if (Number(view) === checkSplit && scene !== 'i12') {
+                ExtensionWindow.emit('scene-load', Number(scene));
+            }
+        }
+        if (typeof oldOnSceneLoad === 'function') {
+            oldOnSceneLoad.apply(void 0, args);
+        }
+    });
+};
+},{"../core/environment":4,"../core/extension":5,"../core/items/item":16,"../core/scene":23,"../internal/app":49,"../internal/eventmanager":50,"../internal/internal":53,"../internal/util/json":56,"../internal/util/version":59,"../util/eventemitter":71,"../util/window":75}],79:[function(require,module,exports){
 /// <reference path="../../defs/es6-promise.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -11299,27 +15302,36 @@ var __extends = (this && this.__extends) || function (d, b) {
 var global_1 = require('../internal/global');
 var environment_1 = require('../core/environment');
 var eventemitter_1 = require('../util/eventemitter');
+var eventmanager_1 = require('../internal/eventmanager');
+var version_1 = require('../internal/util/version');
+var window_1 = require('../util/window');
 /** This utility class is used internally by the framework for certain important
  *  processes. This class also exposes certain important events that the source
  *  plugin may emit.
  *
  * Inherits from: {@link #util/EventEmitter Util/EventEmitter}
  *
- *  Currently there are only four events:
+ *  Currently, the following events are available:
  *    - `save-config`: signals the source that it should save the configuration object. Handler is a function f(config: JSON)
  *    - `apply-config`: signals the source that it should apply the changes that this configuration object describes. Handler is a function f(config: JSON)
  *    - `set-background-color`: only used when the native Color tab is reused and background color is set. Handler is a function f(colorHexNoNumberSign: string)
  *    - `scene-load`: signals the source that the active scene is the scene where it is loaded. Only works on sources loaded in memory
+ *    - `scene-delete` : notifies when a user deletes a scene. Handler is a function f(index: number). Works only on version 2.8.1606.1601 or higher.
  *
  *  Use the `on(event: string, handler: Function)` function to listen to an event.
  */
 var SourcePluginWindow = (function (_super) {
     __extends(SourcePluginWindow, _super);
     /**
-     *  Use getInstance() instead.
+     *  ** For Deprecation
+     *
+     *  Use getInstance()
      */
     function SourcePluginWindow() {
         _super.call(this);
+        if (!environment_1.Environment.isSourcePlugin()) {
+            throw new Error('SourcePluginWindow class is only available for source plugins');
+        }
         this.on('message-source', function (message) {
             if (message.request !== undefined) {
                 if (message.request === 'saveConfig') {
@@ -11331,15 +15343,70 @@ var SourcePluginWindow = (function (_super) {
             }
         });
         SourcePluginWindow._instance = this;
+        SourcePluginWindow._subscriptions = [];
     }
     /**
-     *  Gets the instance of the window utility. Use this instead of the constructor.
+     * ** For deprecation, the need for getting the instance of a SourcePluginWindow looks redundant,
+     * `** since a SourcePluginWindow should technically have a single instance`
+     *
+     * Gets the instance of the window utility. Use this instead of the constructor.
      */
     SourcePluginWindow.getInstance = function () {
         if (SourcePluginWindow._instance === undefined) {
             SourcePluginWindow._instance = new SourcePluginWindow();
         }
         return SourcePluginWindow._instance;
+    };
+    /**
+     *  param: (event: string, ...params: any[])
+     *
+     *  Allows this class to emit an event.
+     */
+    SourcePluginWindow.emit = function (event) {
+        var params = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            params[_i - 1] = arguments[_i];
+        }
+        params.unshift(event);
+        try {
+            SourcePluginWindow
+                .getInstance()
+                .emit
+                .apply(SourcePluginWindow._instance, params);
+        }
+        catch (event) {
+            SourcePluginWindow
+                ._instance
+                .emit
+                .apply(SourcePluginWindow._instance, params);
+        }
+    };
+    /**
+     *  param: (event: string, handler: Function)
+     *
+     *  Allows listening to events that this class emits.
+     *
+     */
+    SourcePluginWindow.on = function (event, handler) {
+        SourcePluginWindow.getInstance().on(event, handler);
+        var isDeleteSceneEventFixed = version_1.versionCompare(version_1.getVersion()).is.greaterThanOrEqualTo(version_1.deleteSceneEventFixVersion);
+        if (event === 'scene-delete' && isDeleteSceneEventFixed) {
+            if (SourcePluginWindow._subscriptions.indexOf('SceneDeleted') < 0) {
+                eventmanager_1.EventManager.subscribe("SceneDeleted", function (settingsObj) {
+                    if (environment_1.Environment.isSourcePlugin()) {
+                        SourcePluginWindow.emit(event, settingsObj['index'] === '' ? null : Number(settingsObj['index']) + 1);
+                    }
+                });
+            }
+        }
+        else if (['set-background-color', 'scene-load', 'apply-config', 'save-config'].indexOf(event) >= 0) {
+        }
+        else {
+            console.warn('Warning! The event "' + event + '" is not yet supported on this version.');
+        }
+    };
+    SourcePluginWindow.off = function (event, handler) {
+        SourcePluginWindow.getInstance().off(event, handler);
     };
     // We modify the configuration sent from the source properties window
     // so that we do not see 'persistent' configuration such as config-url.
@@ -11357,44 +15424,54 @@ var SourcePluginWindow = (function (_super) {
         }
         return data;
     };
+    SourcePluginWindow._subscriptions = [];
     return SourcePluginWindow;
 })(eventemitter_1.EventEmitter);
 exports.SourcePluginWindow = SourcePluginWindow;
-if (environment_1.Environment.isSourcePlugin()) {
-    window.MessageSource = function (message) {
-        SourcePluginWindow.getInstance().emit('message-source', JSON.parse(message));
-    };
-    window.SetConfiguration = function (configObj) {
-        try {
-            var data = JSON.parse(configObj);
-            var source = SourcePluginWindow.getInstance();
-            source.emit('apply-config', data);
-            source.emit('save-config', data);
-        }
-        catch (e) {
-            // syntax error probably happened, exit gracefully
-            return;
-        }
-    };
-    window.setBackGroundColor = function (color) {
-        SourcePluginWindow.getInstance().emit('set-background-color', color);
-    };
-    window.OnSceneLoad = function () {
-        SourcePluginWindow.getInstance().emit('scene-load');
-    };
-}
-},{"../core/environment":5,"../internal/global":39,"../util/eventemitter":57}],"xjs":[function(require,module,exports){
+// for source plugins
+window_1.default.MessageSource = function (message) {
+    SourcePluginWindow.emit('message-source', JSON.parse(message));
+};
+window_1.default.SetConfiguration = function (configObj) {
+    try {
+        var data = JSON.parse(configObj);
+        SourcePluginWindow.emit('apply-config', data);
+        SourcePluginWindow.emit('save-config', data);
+    }
+    catch (e) {
+        // syntax error probably happened, exit gracefully
+        return;
+    }
+};
+window_1.default.setBackGroundColor = function (color) {
+    SourcePluginWindow.emit('set-background-color', color);
+};
+var prevOnSceneLoad = window_1.default.OnSceneLoad;
+window_1.default.OnSceneLoad = function () {
+    var args = [];
+    for (var _i = 0; _i < arguments.length; _i++) {
+        args[_i - 0] = arguments[_i];
+    }
+    if (environment_1.Environment.isSourcePlugin()) {
+        SourcePluginWindow.emit('scene-load');
+    }
+    if (prevOnSceneLoad !== undefined) {
+        prevOnSceneLoad.apply(void 0, args);
+    }
+};
+},{"../core/environment":4,"../internal/eventmanager":50,"../internal/global":51,"../internal/util/version":59,"../util/eventemitter":71,"../util/window":75}],"xjs":[function(require,module,exports){
 function __export(m) {
     for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
 }
-require('./internal/init');
 __export(require('./util/color'));
 __export(require('./util/rectangle'));
 __export(require('./util/io'));
 __export(require('./core/environment'));
 __export(require('./core/app'));
-__export(require('./core/channel'));
+__export(require('./core/streaminfo'));
+__export(require('./core/output'));
 __export(require('./core/channelmanager'));
+__export(require('./core/languageinfo'));
 __export(require('./core/scene'));
 __export(require('./core/transition'));
 __export(require('./core/dll'));
@@ -11425,10 +15502,14 @@ var ichroma_1 = require('./core/items/ichroma');
 exports.KeyingType = ichroma_1.KeyingType;
 exports.ChromaPrimaryColors = ichroma_1.ChromaPrimaryColors;
 exports.ChromaAntiAliasLevel = ichroma_1.ChromaAntiAliasLevel;
-var iplayback_1 = require('./core/items/iplayback');
+var iplayback_1 = require('./core/source/iplayback');
 exports.ActionAfterPlayback = iplayback_1.ActionAfterPlayback;
-var cuepoint_1 = require('./core/items/cuepoint');
+var cuepoint_1 = require('./core/source/cuepoint');
 exports.CuePoint = cuepoint_1.CuePoint;
+var item_2 = require('./core/items/item');
+exports.ViewTypes = item_2.ViewTypes;
+var isource_1 = require('./core/source/isource');
+exports.ItemTypes = isource_1.ItemTypes;
 __export(require('./system/system'));
 __export(require('./system/audio'));
 __export(require('./system/game'));
@@ -11442,6 +15523,7 @@ __export(require('./window/config'));
 __export(require('./window/source'));
 __export(require('./window/extension'));
 __export(require('./window/dialog'));
+__export(require('./internal/remote'));
 var ready_1 = require('./util/ready');
 exports.ready = ready_1.ready;
-},{"./core/app":1,"./core/channel":2,"./core/channelmanager":3,"./core/dll":4,"./core/environment":5,"./core/extension":6,"./core/items/audio":7,"./core/items/camera":8,"./core/items/cuepoint":9,"./core/items/flash":10,"./core/items/game":11,"./core/items/html":12,"./core/items/ichroma":14,"./core/items/ieffects":17,"./core/items/image":19,"./core/items/iplayback":20,"./core/items/item":21,"./core/items/media":23,"./core/items/screen":24,"./core/items/videoplaylist":25,"./core/scene":26,"./core/source/audio":27,"./core/source/camera":28,"./core/source/flash":29,"./core/source/game":30,"./core/source/html":31,"./core/source/image":32,"./core/source/media":33,"./core/source/screen":34,"./core/source/source":35,"./core/source/videoplaylist":36,"./core/transition":37,"./internal/init":40,"./system/audio":47,"./system/camera":48,"./system/file":49,"./system/game":50,"./system/microphone":51,"./system/screen":52,"./system/system":53,"./system/url":54,"./system/videoplaylist":55,"./util/color":56,"./util/io":58,"./util/ready":59,"./util/rectangle":60,"./window/config":61,"./window/dialog":62,"./window/extension":63,"./window/source":64}]},{},["xjs"]);
+},{"./core/app":1,"./core/channelmanager":2,"./core/dll":3,"./core/environment":4,"./core/extension":5,"./core/items/audio":6,"./core/items/camera":7,"./core/items/flash":8,"./core/items/game":9,"./core/items/html":10,"./core/items/ichroma":11,"./core/items/ieffects":13,"./core/items/image":15,"./core/items/item":16,"./core/items/media":18,"./core/items/screen":19,"./core/items/videoplaylist":20,"./core/languageinfo":21,"./core/output":22,"./core/scene":23,"./core/source/audio":24,"./core/source/camera":25,"./core/source/cuepoint":26,"./core/source/flash":27,"./core/source/game":28,"./core/source/html":29,"./core/source/image":37,"./core/source/iplayback":39,"./core/source/isource":41,"./core/source/media":43,"./core/source/screen":44,"./core/source/source":45,"./core/source/videoplaylist":46,"./core/streaminfo":47,"./core/transition":48,"./internal/remote":55,"./system/audio":61,"./system/camera":62,"./system/file":63,"./system/game":64,"./system/microphone":65,"./system/screen":66,"./system/system":67,"./system/url":68,"./system/videoplaylist":69,"./util/color":70,"./util/io":72,"./util/ready":73,"./util/rectangle":74,"./window/config":76,"./window/dialog":77,"./window/extension":78,"./window/source":79}]},{},["xjs"]);

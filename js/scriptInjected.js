@@ -2,7 +2,7 @@
 
 	var existingXJS = document.getElementById('xjsInject');
 	var xjs;
-	var Item;
+	var Source;
 	var configObj = {};
 	var sourceWindow;
 
@@ -13,18 +13,18 @@
 	  var body = document.querySelector('body');
 	  body.appendChild(xjsScript);
 	  xjsScript.onload = function() {
-	      
+
 	    xjs = require('xjs');
-	    Item = xjs.Item;
+	    Source = xjs.Source;
 	    xjs.ready()
-	      .then(Item.getCurrentSource)
+	      .then(Source.getCurrentSource)
 	      .then(function(item) {
 	        myItem = item;
 	      });
 	    sourceWindow = xjs.SourcePluginWindow.getInstance();
 	    sourceWindow.on('save-config', function(config) {
 	      configObj = config;
-	      Item.getCurrentSource().then(function(myItem) {
+	      Source.getCurrentSource().then(function(myItem) {
 	        myItem.saveConfig(configObj).then(function() {
 	          var formerLocation = location.href;
 	          var formerChannel = formerLocation.substring(21, formerLocation.length-13);
@@ -40,5 +40,5 @@
 	  };
 	  xjsScript.src = 'http://localhost/Script_Plugin/twitch_chat_source_css/js/xjs.js';
 	}
-  
+
 })();

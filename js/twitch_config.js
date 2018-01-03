@@ -5,7 +5,7 @@
 		var xjs = require('xjs');
 		var system = xjs.System;
 		var Item = xjs.Item;
-		var configWindow = xjs.SourcePropsWindow.getInstance();
+		var configWindow;
 		var myItem;
 		var configObj = {};
 		var DEFAULT_OPACITY = 100;
@@ -18,6 +18,7 @@
 
 		xjs.ready()
 		.then(function() {
+			configWindow = xjs.SourcePropsWindow.getInstance();
 			// configure tabs in source properties dialog
 			configWindow.useTabbedWindow({
 				customTabs: [CUSTOM_TAB_NAME],
@@ -114,7 +115,7 @@
 			};
 
 			document.onselectstart = function(event)
-			{ 
+			{
 				// disable selection if not input/textarea/xui-input
 				var nodeName = event.target.nodeName;
 				if (nodeName === 'INPUT' || nodeName === 'TEXTAREA' || nodeName === 'XUI-INPUT')
@@ -134,7 +135,7 @@
 			channelConnectButton.addEventListener('click', function()
 			{
 				// check if channel is valid/existing
-				var remotePath = 'https://api.twitch.tv/kraken/channels/' + channelInput.value;
+				var remotePath = 'https://api.twitch.tv/kraken/channels/' + channelInput.value + '?client_id=v0xl5lgr9bry2emawhty1qhxe5jmf4';
 
 				var req = new XMLHttpRequest();
 				req.open('GET', remotePath);
@@ -212,7 +213,7 @@
 			    fontViewersSelect.optionlist = fontSelectList;
 
 					return myItem.loadConfig();
-				}) 
+				})
 				.then(function(config) {
 					configObj = config;
 					// load configuration settings or use default if not present
@@ -255,11 +256,11 @@
 					/*
 					 * use setTimeout as a work-around for bug:
 					 * eventlisteners added below still are somewhat triggered
-					 * by above loading of settings 
+					 * by above loading of settings
 					 * (maybe due to bubbling/propagation, for further investigation)
 					 */
 					setTimeout(function(){
-						addComponentEventListeners();	
+						addComponentEventListeners();
 					}, 0);
 				});
 			};
